@@ -119,9 +119,11 @@ class TargetLockTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'synthetic exception'):
             with locks.target_lock(**TARGET, lock_dir=self.directory) as lease:
                 path = lease.path
-                self.assertEqual(path.read_bytes(), b'\0')
                 raise RuntimeError('synthetic exception')
         self.assertTrue(path.is_file())
+        # Windows byte-range locks also deny reads of the locked marker.
+        # Inspect its retained content only after exception cleanup releases it.
+        self.assertEqual(path.read_bytes(), b'\0')
         with locks.target_lock(**TARGET, lock_dir=self.directory) as second:
             self.assertEqual(second.path, path)
         self.assertEqual(list(self.directory.iterdir()), [path])
