@@ -53,3 +53,9 @@ Windows本機直接使用安裝位置的runner及assets，不建立這個Mac res
 ## 公開資料與本機資料
 
 公開版只含skill與腳本。原廠編輯器、自己的`.ses`、本機template manifest、requests、results及流量留在自己的工作目錄。範本匯入後的兩個assets檔案均列入`.gitignore`；請勿強制加入。
+
+## 本機工具互斥
+
+Runner 依同一 OS user、VM 與 EXE 路徑取得非阻塞鎖；從 staging 前持有至返回，另一同目標呼叫立即拒絕。它只協調同一 host 的本套工具，不是跨主機鎖。Parallels仍可能有 exit255／結果不明；保留 stage/request 並先回讀，不自動重送修改。
+
+Windows 本機後端忽略 `--vm` 的標籤差異，鎖使用固定 Windows-local identity 與 EXE；Mac／Parallels 的鎖仍包含正規化 VM 名稱與 EXE。

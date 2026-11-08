@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "fps": 25,
+  "encoding": "ascii",
+  "expected_count": 0,
+  "operations": [
+    {
+      "op": "preset_capture",
+      "channel_id": 256,
+      "group_name": "Example Lab",
+      "name": "Input Example",
+      "verify_control_ids": [
+        "210c000001"
+      ]
+    }
+  ]
+}

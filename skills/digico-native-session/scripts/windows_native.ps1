@@ -54,6 +54,26 @@ function Expected-Frames($step){
         'save'{$frames.Add((Hex (Frame 1 422 0 0 ([BitConverter]::GetBytes([int32]0)))))}
         'load'{$frames.Add((Hex (Frame 3 411 0 0 (String-Body $ascii.GetBytes([string]$step.path)))))}
         'new_session'{}
+        'export_session'{}
+        'set_control'{
+            $bound=Read-NativeControlBinding $step;$payload=Assert-NativeControlValue $bound $step
+            $frames.Add((Hex (New-NativeControlFrame $step.id $payload)))
+        }
+        'set_group_assignment'{
+            $bound=Read-NativeGroupAssignmentBinding $step;$payload=Assert-NativeGroupAssignmentValue $bound $step
+            $frames.Add((Hex (New-NativeControlFrame $step.id $payload)))
+        }
+        {$_-in @('set_input_route','set_output_route')}{
+            $bound=Read-NativeRouteBinding $step;$payload=Assert-NativeRouteValue $bound $step
+            $frames.Add((Hex (New-NativeControlFrame $step.id $payload)))
+        }
+        'set_channel_name'{
+            $bound=Read-NativeControlBinding $step;$id=ConvertFrom-NativeControlHex $step.id 5
+            if($bound.raw_type-ne 4-or $id[0]-ne 255){throw 'No native channel-name string contract.'}
+            $bytes=$nameEncoding.GetBytes([string]$step.name)
+            if($bytes.Length-lt 1-or $bytes.Length-gt 31-or $bytes-contains [byte]0-or (Hex $bytes)-cne $step.name_hex){throw 'Invalid encoded channel name.'}
+            $frames.Add((Hex (New-NativeControlFrame $step.id (String-Body $bytes))))
+        }
         default{throw 'Unknown native operation.'}
     };return ,$frames.ToArray()
 }
@@ -228,7 +248,7 @@ try{
     if(Test-Path -LiteralPath $ResultPath){throw 'Result path already exists; choose a fresh file.'}
     $result.request_sha256=(Get-FileHash -LiteralPath $RequestPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $request=Get-Content -LiteralPath $RequestPath -Raw -Encoding UTF8|ConvertFrom-Json
-    if($request.schema_version-ne 1-or $request.mode-notin @('inspect','execute')){throw 'Invalid compiled request schema/mode.'}
+    if($request.schema_version-ne 1-or $request.mode-notin @('inspect','execute','status','inventory','meters','presets','preset_execute','structure')){throw 'Invalid compiled request schema/mode.'}
     $ascii=Strict-Encoding 'ascii';$nameEncoding=Strict-Encoding $request.encoding
     if($request.fps-ne 25){throw 'Only the runtime-verified 25fps profile is supported.'}
     if(-not $SkillRoot){if(-not $PSScriptRoot){throw 'SkillRoot is required for script-block invocation.'};$SkillRoot=Split-Path -Parent $PSScriptRoot}
@@ -251,17 +271,89 @@ public sealed class DiGiCoReadOnly:IDisposable {
 '@}
     $reader=[DiGiCoReadOnly]::new($process.Id);$clock=[Diagnostics.Stopwatch]::StartNew()
     $before=Read-State;$result.before=$before;$result.process_id=$process.Id;$result.executable_sha256=$expectedHash
-    if($request.mode-eq 'inspect'){$result.after=$before;$result.status='ok'}else{
+    if($request.mode-eq 'inspect'){$result.after=$before;$result.status='ok'}
+    elseif($request.mode-eq 'structure'){
+        . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_structure.ps1'))))
+        $result.structure=Read-NativeSessionStructure
+        $result.after=Read-State
+        if((Fingerprint $result.after)-ne (Fingerprint $before)){throw 'Snapshot fields changed during structure readback.'}
+        $result.status='ok'
+    }
+    elseif($request.mode-in @('presets','preset_execute')){
+        . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_preset_adapter.ps1'))))
+        Invoke-DiGiCoPresetRequest -Request $request -Result $result -Verified $verified
+        $result.status='ok'
+    }
+    elseif($request.mode-eq 'status'){
+        . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_status.ps1'))))
+        $result.native_status=Invoke-DiGiCoNativeStatus -TextEncoding $request.encoding
+        $result.after=Read-State
+        if((Fingerprint $result.after)-ne (Fingerprint $before)){throw 'Snapshot fields changed during status query.'}
+        $result.status='ok'
+    }
+    elseif($request.mode-eq 'inventory'){
+        . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_inventory.ps1'))))
+        $selection=-1;if(Has $request 'channel_id'){$selection=Int $request.channel_id 0 65535 'channel_id'}
+        $progress={param($sample) [IO.File]::WriteAllText(($ResultPath+'.progress.json'),($sample|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))}
+        $result.inventory=Read-NativeInventory -IncludeResponseTables:([bool]$request.include_response_tables) -ChannelId $selection -IncludePhysicalSources:([bool]$request.include_physical_sources) -IncludeGroupOutputs:([bool]$request.include_group_outputs) -ProgressCallback $progress
+        $result.after=Read-State
+        if((Fingerprint $result.after)-ne (Fingerprint $before)){throw 'Snapshot fields changed during inventory.'}
+        $result.status='ok'
+    }
+    elseif($request.mode-eq 'meters'){
+        . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_meters.ps1'))))
+        $selection=-1;if(Has $request 'channel_id'){$selection=Int $request.channel_id 0 65535 'channel_id'}
+        $limit=Int $request.limit 1 1000 'meter limit'
+        $result.meters=Read-NativeMeters -ChannelId $selection -Limit $limit
+        $result.after=Read-State
+        if((Fingerprint $result.after)-ne (Fingerprint $before)){throw 'Snapshot fields changed during meter inspection.'}
+        $result.status='ok'
+    }
+    else{
         if(-not (Test-Path -LiteralPath (Join-Path ([IO.Path]::GetDirectoryName($ExecutablePath)) 'OffLine.ini'))){throw 'Verified offline-editor marker OffLine.ini is missing.'}
         if($before.fps-ne 25){throw 'Runtime editor is not set to 25fps; no FPS mutation is implemented.'}
         $busyWorker=Read-SaveWorker
         if($busyWorker-and $busyWorker.finished-eq 0){throw 'The original editor save worker is still running; no operation was sent.'}
         $expected=Int $request.expected_count 0 2000 'expected_count';if($before.snapshot_count-ne $expected){throw 'Expected snapshot count differs from actual state.'}
         $steps=@($request.steps);if($steps.Count-lt 1-or $steps.Count-gt 1000){throw 'Invalid operation count.'}
+        $nonCue=@($steps|Where-Object {$_.op-in @('set_control','set_channel_name','set_input_route','set_output_route','set_group_assignment')})
+        if($nonCue.Count-gt 0){
+            . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_inventory.ps1'))))
+            . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_controls.ps1'))))
+            . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_context.ps1'))))
+            . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_routes.ps1'))))
+            if(-not $request.control_inventory_binding.session_path-or $request.control_inventory_binding.session_path-ine $before.current_session_path){throw 'Control inventory belongs to a different current session path; read a fresh inventory.'}
+        }
+        $controlSimulation=@{};$nameSimulation=@{}
         $sim=[Collections.ArrayList]::new();foreach($s in $before.snapshots){[void]$sim.Add($s)}
         # Validate the complete plan, indices, bytes and file prerequisites before connecting.
         foreach($step in $steps){
-            if($step.op-notin @('create','delete','rename','timecode','save_as','save','load','new_session')){throw 'Unknown operation.'}
+            if($step.op-notin @('create','delete','rename','timecode','save_as','save','load','new_session','set_control','set_channel_name','set_input_route','set_output_route','set_group_assignment','export_session')){throw 'Unknown operation.'}
+            if($step.op-eq 'set_group_assignment'){$groupBinding=Read-NativeGroupAssignmentBinding $step;[void](Assert-NativeGroupAssignmentValue $groupBinding $step)}
+            if($step.op-in @('set_input_route','set_output_route')){$routeBinding=Read-NativeRouteBinding $step;[void](Assert-NativeRouteValue $routeBinding $step)}
+            if($step.op-eq 'export_session'){
+                if($steps.Count-ne 1){throw 'Session export must be a standalone request.'}
+                . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $SkillRoot 'scripts\native_transfer.ps1'))))
+                Assert-Path $step.source;Assert-Path $step.destination
+                [void](Check-SessionFile $step.source)
+                if(Test-Path -LiteralPath $step.destination){throw 'Session export destination already exists.'}
+                if(-not (Test-Path -LiteralPath ([IO.Path]::GetDirectoryName($step.destination)) -PathType Container)){throw 'Session export parent directory does not exist.'}
+            }
+            if($step.op-eq 'set_control'){
+                $bound=Read-NativeControlBinding $step;[void](Assert-NativeControlValue $bound $step)
+                $expectedRaw=Hex $bound.value_raw
+                if($controlSimulation.ContainsKey([string]$step.id)){$expectedRaw=$controlSimulation[[string]$step.id]}
+                if($step.control_contract.expected_payload_hex-cne $expectedRaw){throw 'Control compare-before-write value differs; no operation was sent.'}
+                $controlSimulation[[string]$step.id]=$step.control_contract.payload_hex
+            }
+            if($step.op-eq 'set_channel_name'){
+                $channel=[long]$step.channel_pointer;$id=ConvertFrom-NativeControlHex $step.id 5
+                if($reader.U16($channel+0x30)-ne $step.channel_id-or [BitConverter]::ToUInt16($id,3)-ne $step.channel_id){throw 'Channel identity changed.'}
+                $oldName=Hex (Read-Short ($channel+0x34));$nameKey=[string]$step.channel_id
+                if($nameSimulation.ContainsKey($nameKey)){$oldName=$nameSimulation[$nameKey]}
+                if($oldName-cne $step.expected_name_hex){throw 'Channel name changed since inventory.'}
+                $nameSimulation[$nameKey]=$step.name_hex
+            }
             if($step.op-in @('load','new_session')-and $steps.Count-ne 1){throw 'Load/new_session must be a standalone request; inspect after loading.'}
             if($step.op-in @('save','save_as')-and $step-ne $steps[-1]){throw 'Save must be the final operation in a batch.'}
             if($step.op-in @('create','delete','rename','timecode')){
@@ -296,6 +388,37 @@ public sealed class DiGiCoReadOnly:IDisposable {
             if($reader.U8($base+0x127AD6E)-eq 0){throw 'Native identity connection lost before operation.'}
             $indeterminate=$step
             switch($step.op){
+                'set_group_assignment'{
+                    $bound=Read-NativeGroupAssignmentBinding $step;$payload=Assert-NativeGroupAssignmentValue $bound $step
+                    $noop=[bool]$step.group_contract.no_change
+                    if(-not $noop){Send-Step $step;$bound=Wait-NativeGroupAssignment $step}
+                    $verified.Add([pscustomobject]@{op='set_group_assignment';channel_id=$step.channel_id;group_channel_id=$step.group_channel_id;enabled=$step.enabled;verified=$true;no_change=$noop;audio_delivery_verified=$false});break
+                }
+                {$_-in @('set_input_route','set_output_route')}{
+                    $bound=Read-NativeRouteBinding $step;$payload=Assert-NativeRouteValue $bound $step
+                    $noop=((Hex $bound.control.value_raw)-ceq $step.control_contract.payload_hex)
+                    if($step.op-eq 'set_output_route'){$noop=[bool]$step.route_contract.no_change}
+                    if(-not $noop){Send-Step $step;$bound=Wait-NativeRouteWrite $step}
+                    $verified.Add([pscustomobject]@{op=$step.op;route_kind=$step.route_kind;channel_id=$step.channel_id;verified=$true;no_change=$noop;route_raw_hex=(Hex $bound.control.output_raw);semantic_route=$bound.route;audio_delivery_verified=$false});break
+                }
+                'export_session'{
+                    $exported=Invoke-DiGiCoNativeFileExport -SourcePath $step.source -DestinationPath $step.destination
+                    $verified.Add([pscustomobject]@{op='export_session';verified=$true;transfer=$exported});break
+                }
+                'set_control'{
+                    $bound=Read-NativeControlBinding $step
+                    if((Hex $bound.value_raw)-cne $step.control_contract.expected_payload_hex){throw 'Control changed immediately before write.'}
+                    $noop=($step.control_contract.expected_payload_hex-ceq $step.control_contract.payload_hex)
+                    if(-not $noop){Send-Step $step;$bound=Wait-NativeControlWrite $step}
+                    $verified.Add([pscustomobject]@{op='set_control';id=$step.id;verified=$true;no_change=$noop;value_raw_hex=(Hex $bound.value_raw);output_raw_hex=(Hex $bound.output_raw);value=$step.control_contract.value});break
+                }
+                'set_channel_name'{
+                    $bound=Read-NativeControlBinding $step;$channel=[long]$step.channel_pointer
+                    if((Hex (Read-Short ($channel+0x34)))-cne $step.expected_name_hex){throw 'Channel name changed immediately before write.'}
+                    $noop=($step.name_hex-ceq $step.expected_name_hex)
+                    if(-not $noop){Send-Step $step;$timer=[Diagnostics.Stopwatch]::StartNew();do{Pump 75;$newName=Hex (Read-Short ($channel+0x34))}while($newName-cne $step.name_hex-and $timer.ElapsedMilliseconds-lt 10000);if($newName-cne $step.name_hex){throw 'Native channel name did not match readback.'}}
+                    $verified.Add([pscustomobject]@{op='set_channel_name';channel_id=$step.channel_id;verified=$true;no_change=$noop;name_hex=$step.name_hex});break
+                }
                 {$_-in @('create','delete','rename','timecode')}{Send-Step $step;$working=Wait-Edit $working $step;$verified.Add([pscustomobject]@{op=$step.op;index=$step.index;verified=$true;snapshot_count=$working.snapshot_count});break}
                 {$_-in @('save_as','save')}{ $saved=Native-Save $step $working;$working=$saved.state;$verified.Add([pscustomobject]@{op=$step.op;verified=$true;path=$saved.path;sha256=$saved.sha256;bytes=$saved.bytes;backup_path=$saved.backup_path;native_worker=$saved.worker});break}
                 'load'{$working=Native-Load $step.path;if($working.fps-ne 25){throw 'Loaded session is not 25fps; no further operation was sent.'};$verified.Add([pscustomobject]@{op='load';verified=$true;verification='observed path transition, stable fields and native result; same-path reload uses a byte-identical temporary alias';path=$step.path;snapshot_count=$working.snapshot_count});break}
@@ -328,7 +451,7 @@ public sealed class DiGiCoReadOnly:IDisposable {
     $parent=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($ResultPath))
     if(-not (Test-Path -LiteralPath $ResultPath)){
         $temporary=Join-Path $parent ('.digico-result-'+[Guid]::NewGuid().ToString('N')+'.json')
-        [IO.File]::WriteAllText($temporary,($result|ConvertTo-Json -Depth 30),[Text.UTF8Encoding]::new($false));[IO.File]::Move($temporary,$ResultPath)
+        [IO.File]::WriteAllText($temporary,($result|ConvertTo-Json -Depth 30 -Compress),[Text.UTF8Encoding]::new($false));[IO.File]::Move($temporary,$ResultPath)
         [IO.File]::WriteAllBytes($ResultPath+'.tx.bin',$tx.ToArray());[IO.File]::WriteAllBytes($ResultPath+'.rx.bin',$rx.ToArray())
     }
     $tx.Dispose();$rx.Dispose()

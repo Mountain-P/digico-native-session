@@ -1,20 +1,30 @@
 # DiGiCo Native Session
 
-以 DiGiCo 原生 TCP 操作 **Windows Quantum1 V2126 離線編輯器**的 Codex skill 與命令列工具。支援建立範本式 Session、增刪改 Snapshot、設定 25fps RecallAt、儲存與載入，並以唯讀 `ReadProcessMemory` 回讀確認結果。
+以 DiGiCo 原生 TCP 操作 **Windows Quantum1 V2126 離線編輯器**的 Codex skill 與命令列工具。支援範本式 Session、混音參數、路由、處理 Preset、狀態／電平讀取與 MCP，並保留 Snapshot 編輯及 25fps RecallAt。所有修改由唯讀 `ReadProcessMemory` 回讀確認。
 
-操作不使用 OSC、UI 自動化或程序記憶體寫入。目前範圍是確切 V2126 build、25fps、`127.0.0.1:2028`；實體控台、其他版本與任意遠端主機未驗證。
+操作不使用 OSC、UI 自動化或程序記憶體寫入。目前範圍是確切 V2126 build、25fps、控制 `127.0.0.1:2028`、唯讀狀態 `127.0.0.1:2029`；實體控台、其他版本與任意遠端主機未驗證。
 
 ## 功能與界線
 
 | 功能 | 行為 |
 |---|---|
 | `inspect` | 唯讀取得 Snapshot count、名稱 bytes、RecallAt、flags 與目前 Session 路徑，不建立原生 TCP 連線 |
+| `status`／`meters` | 原生狀態回應、快取電平及來源／freshness資訊 |
+| `structure` | 讀原生123-byte結構與已辨識的counts／rates；不提供重建結構 setter |
+| `inventory`／`catalog` | 探索實際通道、模組、定義、數值範圍與可寫候選 |
+| 混音參數／名稱 | 原生 float32、離散 enum、嚴格編碼通道名稱；依當前模式驗證 |
+| 路由／Group | mono Input 主備輸入、key、Insert、實體輸出及群組分配 |
+| Session 匯出 | 原生區塊傳輸、ACK、SessionVerify、hash核對；不接受 mirror |
+| Preset | Input processing 庫存、capture／rename／update／recall、scope、lock、delete |
+| MCP | 本機 stdio、10個 typed tools、寫入預設 dry-run |
 | `plan` | 離線驗證 JSON、模擬 index 變化並產生封包計畫，不接觸 VM／編輯器 |
 | `new_session` | 載入自己的零 Snapshot 範本，另存新檔；保留範本的結構與 routing |
 | Snapshot 操作 | 從目前 console state 建立、刪除、改名、設定並啟用 RecallAt |
 | Save／Load | 由原廠編輯器寫入及讀取 `.ses`，另以狀態與檔案驗證 |
 
-`new_session` 是範本式新檔，不是 factory reset。工具不會自動替不同 Cue 產生音量、routing、BPM 或其他 mixer 設定，也不直接自行序列化 `.ses`。
+`new_session` 是範本式新檔，不是 factory reset。`create` 本身不會替不同 Cue 產生不同 mixer 設定。混音與路由使用獨立語意操作；工具不直接自行序列化 `.ses`。
+
+混音與路由操作見 [非 Cue 指南](skills/digico-native-session/references/noncue.md)，MCP 啟動與設定見 [MCP](skills/digico-native-session/references/mcp.md)。完整範圍與證據層級見 [能力與驗證](CAPABILITIES.md)。
 
 ## 安裝與準備
 

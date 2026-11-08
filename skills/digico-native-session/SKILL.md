@@ -1,36 +1,62 @@
 ---
 name: digico-native-session
-description: 使用原生 TCP 與唯讀狀態回讀，在本機 Windows Quantum1 V2126／25fps 離線編輯器建立範本式 Session、增刪改 Snapshot、設定 RecallAt、儲存與載入；支援 Windows 本機及 Mac Parallels，不使用 OSC 或 UI 自動化。
+description: 以 DiGiCo 原生 TCP 在 Windows Quantum1 V2126 離線編輯器管理 Session、混音參數、路由與 Preset，讀取控制目錄、Session 結構、狀態及電平，並提供 MCP；保留 Snapshot 編輯與 25fps timecode 功能。支援 Mac Parallels，唯讀記憶體驗證；不用 OSC 或 UI，不適用實體控台或其他版本。
 ---
 
-# DiGiCo 原生 Session
+# DiGiCo 原生 Session 與混音控制
 
-使用 `scripts/native_session.py` 操作確切 Quantum1 V2126 離線編輯器。原生 TCP 只連 `127.0.0.1:2028`；唯讀 `ReadProcessMemory` 用於驗證，不用來寫入、注入或繞過原廠 gate。其他 EXE hash、FPS、實體控台及任意遠端主機不屬於已驗證能力。
+使用隨附 `scripts/native_session.py`，以原生 TCP 修改離線編輯器，再用唯讀 `ReadProcessMemory` 驗證實際狀態。規劃不連線；執行必須帶 `execute --send`。工具不安裝軟體、不啟動 VM、不更改防火牆、不操作 UI，也不寫程序記憶體。
 
-## 選擇起點
+只支援 **Quantum1 V2126／25fps**，`Quantum1.exe` SHA-256 必須是：
 
-- 編輯目前 Session：以新一次 inspect 的 count、路徑及名稱 bytes 為起點。
-- `new_session`：載入本機配置的零 Snapshot 範本，再另存新路徑；保留範本結構與 routing，並非 factory reset。公開版不附 `.ses` 範本，按 [本機空範本](references/operations.md#本機空範本) 準備自己的檔案。
-- 指定其他同版 Session：先以獨立 `load` request 載入，再重新 inspect／plan。
+```text
+535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d
+```
 
-Create 取目前 console state，不會自行為每段 Cue 建立不同的 mixer 設定。Load／new_session 會替換目前 editor 狀態；不要把其視為唯讀查詢。
+非 Cue 功能先讀 [混音、路由與唯讀資料](references/noncue.md)，MCP 接入讀 [MCP](references/mcp.md)。不要由模組名稱推定所有控制都能寫：以本次 inventory 的型別、原生定義、owner callback、enum／模式範圍與回讀結果為準。Preset 使用獨立請求，不混入 Session／Snapshot 操作；詳見 [Preset](references/presets.md)。
 
-## 執行順序
+先確認使用者要的起點：
 
-1. 實際送出時，先讀 [執行環境](references/windows-host.md)，確認既有程序、明確 EXE 路徑、25fps、Network 與全新 result 位置；不可沿用舊 PID。
-2. 執行 `inspect`，取得實際 count、name_hex、RecallAt、active flags 與目前 Session 路徑。此模式不連原生 TCP。
-3. 按 [request schema](references/operations.md) 寫原始 JSON，填入最新 `expected_count`，先 `plan` 驗證整批 index／編碼／路徑。
-4. 對已授權的編輯工作執行 `execute --send`，傳入同一份原始 request；plan 輸出的 `steps` 不是輸入格式。
-5. 讀本次新 result，核對 `status="ok"`、`verified_steps` 與 `after`。檔案持久化需另用獨立 `load` request 比對保存前後欄位，見 [驗證與恢復](references/validation.md)。
+- `new_session`：載入自己的同版、25fps、零 Snapshot 範本（公開版不附 Session；先依 operations reference 設定），再另存新檔；保留範本的結構與 routing，**不是 factory reset**。
+- 編輯目前 Session：以 `inspect` 的實際 count 與目前路徑為起點。
+- 使用其他範本：先單獨 `load` 明確指定的同版 `.ses`，再重新 inspect／plan。`new_session` 不接受任意範本參數。
 
-純離線規劃可直接使用使用者提供的 count，不要求先連 Windows／VM；保留 `runtime_acceptance_verified=false`。`execute` 沒有 `--send` 也只輸出 dry-run，不呼叫 Windows runner。
+## 工作流程
 
-## 資料契約
+若使用者只要離線規劃，可直接用其提供的 count 寫 request 並 `plan`，不需要 Windows／VM 或 inspect；註明 count 來自使用者、`runtime_acceptance_verified=false`。實際送出前才完成下列環境與回讀步驟。
 
-Snapshot 名稱上限31個編碼後 bytes，禁止默默截斷、替換或音譯。支援嚴格 `ascii`／`cp950`／`utf-8`；CP950 raw bytes 的儲存與重載已驗證，GUI 顯示及任意編碼解釋不可據此保證。以 `name_hex` 比對。
+1. 準備實際執行時，讀 [Windows 執行環境](references/windows-host.md)，確認既有編輯器、明確 EXE 路徑與結果輸出位置。不可沿用舊 PID 或把範例路徑當成目前環境。
+2. **inspect**：送出前讀實際 FPS、Snapshot count、名稱 raw bytes、RecallAt、啟用旗標與 Session 路徑；此模式不連原生 TCP。
+3. 依 [request schema](references/operations.md) 寫原始 request。實際執行的 `expected_count` 填剛讀到的 count；離線規劃可使用上述 user-reported count。先 `plan` 完整驗證所有 index、名稱 bytes、timecode 與檔案路徑。
+4. **execute --send**：把同一份**原始 request**交給工具；不要把 `plan` 輸出的 `steps` 文件當作 request。每一步都必須通過實際回讀，才繼續下一步。
+5. 讀這一次的**全新 result**，確認 `status="ok"`、`verified_steps` 與 `after`。儲存需有新／更新且穩定的檔案、hash、目前路徑；需要確認磁碟持久化時，再以獨立 request 載入輸出檔並比對回讀。見 [驗證與失敗處理](references/validation.md)。
 
-Timecode 使用25fps的 `HH:MM:SS:FF`，`FF<25`；內部是 quarter frames。保留使用者的 Cue 順序，不自行按全域時間排序。路徑限ASCII Windows本機磁碟絕對 `.ses` 路徑。
+Mac／Parallels 範例；路徑與 VM 名稱只是範例，先替換成已確認值：
 
-遇到 error／timeout／`indeterminate_operation`，先用新的 inspect 回讀；create／delete不是冪等操作，不可盲目重播整批。若有 `recovery_stage_path`，保留該暫存檔，可能仍是目前Session路徑。工具不安裝軟體、啟動VM、改INI／防火牆、操作UI或寫程序記憶體。
+```sh
+SKILL="$HOME/.codex/skills/digico-native-session"
+WORK="$HOME/Documents/DiGiCoWork"
+python3 "$SKILL/scripts/native_session.py" inspect \
+  --vm 'Windows 11' --exe 'C:\DiGiCo\Quantum1\Quantum1.exe' \
+  --encoding cp950 --result "$WORK/inspect-001.json"
+python3 "$SKILL/scripts/native_session.py" plan \
+  --request "$WORK/request.json" --output "$WORK/plan.json"
+python3 "$SKILL/scripts/native_session.py" execute \
+  --request "$WORK/request.json" --send \
+  --vm 'Windows 11' --exe 'C:\DiGiCo\Quantum1\Quantum1.exe' \
+  --result "$WORK/execute-001.json"
+```
 
-需要查封包或版本位址時才讀 [協定與RVA](references/protocol.md)。
+每個 `--result` 必須是絕對路徑，且該檔與其 `.request.json` 均尚不存在；不要重用舊結果。Mac請用home內的可見一般資料夾（例如`~/Documents`），任何dot-prefixed路徑component或檔名都會被拒絕。Skill可留在隱藏`.codex`目錄，runner/assets會先複製到result旁的唯一可見stage，詳見Windows reference。`execute` 省略 `--send` 只會輸出 dry-run JSON，不連 Windows／VM／網路，也不產生 runtime result 檔，但 CLI 仍要求填寫 target／result 參數。
+
+## 名稱與時間
+
+- Snapshot 名稱上限是 **31 個編碼後 bytes**，不可默默截斷、替換或音譯。`ascii`、`cp950`、`utf-8` 都採嚴格編碼；中文 CP950 raw bytes 已通過原生儲存／重載，但 Windows ACP1252 下的中文 GUI 顯示尚未驗證。保留 `name_hex` 作為資料比對依據。
+- Timecode 用 `HH:MM:SS:FF`、25fps，`FF<25`；保留使用者順序，不自行依全域時間重新排序。內部 RecallAt 是 **quarter frames**，不是毫秒或 packed HHMMSSFF。
+- `create` 從目前 console state 建立 Snapshot；只有名稱與 RecallAt 會按 request 改動，不會自動為每段歌曲產生不同 routing、音量、BPM 或調性設定。
+
+## 不確定結果
+
+若連線中斷、逾時、`status="error"` 或出現 `indeterminate_operation`，先用新的 `inspect` 回讀，再規劃剩餘工作。**不可盲目重送整批 create／delete**；它們會改變 count 與後續 index。已驗證操作邊界上的重連不等於可以重播結果不明的操作。若有 `recovery_stage_path`，保留該檔：目前Session可能仍指向alias／暫存範本，先確認實際路徑再恢復。
+
+需要查核封包、位址或改版適用性時才讀 [確切協定與位址](references/protocol.md)。其他 EXE hash、FPS、實體控台與非 loopback 主機不屬於本技能已驗證能力，不能透過放寬 hash／改寫記憶體來冒充支援。

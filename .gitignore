@@ -13,6 +13,7 @@
 *.pvm/
 **/empty-template.json
 **/assets/*.json
+!skills/digico-native-session/assets/control-enums.json
 
 # Runtime requests, results, traces, and scratch directories
 *.tx.bin
@@ -44,3 +45,5 @@ __pycache__/
 venv/
 .DS_Store
 Thumbs.db
+
+*.progress.json

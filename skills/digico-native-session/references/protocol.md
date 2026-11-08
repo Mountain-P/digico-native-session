@@ -91,3 +91,12 @@ Q = ((HH * 3600 + MM * 60 + SS) * 25 + FF) * 4
 名稱儲存是最多31bytes的ShortString，沒有per-name codepage。Serializer／loader保留raw bytes；CP950跨save／load保存已驗證，GUI渲染不由此保證。路徑同為byte字串，本client限ASCII本機磁碟路徑最多255bytes。
 
 載入前檢查36-byte header：前26bytes為 `DiGiCo     Q1  .SES vN   \r`，offset34的uint16為2126。這是狹窄的model／version篩選，不是完整`.ses` parser，也不能證明檔案為零Snapshot、25fps或其餘內容有效。這些條件需要原廠載入及實際回讀。
+
+
+## 非 Cue 擴充
+
+封包仍使用同一16-byte prefix與尾端u16加總 checksum。Category8直接保留5-byte native control ID（Parameter/Module/Band/Channel/ChannelType），ListIndex0；numeric payload是4個原生 bits，string payload是u32 byte_length後接raw bytes。不同raw datatype不能互換；packed routes必須用語意planner。
+
+Processing Preset命令group0x1B6：C9 capture、CE rename、CC update、C8 recall、D2 lock、D1 delete；scope D3用Category2與u32長度32後的set256。詳細欄位、scope與merge語意見[presets](presets.md)。Meter只讀controller output/secondary，沒有注入Category9來模擬音訊。
+
+File-only Session傳輸使用獨立request、block ACK與SessionVerify，不接受完整mirror。Block header有未初始化欄位，ACK需回送原5-byte identifier再改subcommand；不能將該欄位固定成從單次capture猜出的常數。完整payload與檔案hash均需驗證，成功由原生load另核對。

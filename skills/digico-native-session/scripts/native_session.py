@@ -20,6 +20,11 @@ import sys
 import tempfile
 
 from mirror_codec import build_packet
+from control_catalog import normalize_inventory, plan_control_write
+from routing_catalog import build_routing_catalog, plan_input_route, plan_output_route, plan_group_assignment
+from preset_adapter import is_preset_request, compile_preset_request
+from session_structure import decode_structure_readback
+from target_lock import locked_target
 
 SCHEMA_VERSION = 1
 ENCODINGS = ('ascii', 'cp950', 'utf-8')
@@ -132,9 +137,13 @@ def _string_body(raw):
     return struct.pack('<I', len(raw)) + raw
 
 
-def compile_request(request):
+def compile_request(request, inventory=None, presets=None):
     """Validate the entire request and simulate indices before returning any plan."""
     import struct
+    if is_preset_request(request):
+        if presets is None:
+            raise ContractError('Preset writes require --presets from a fresh native presets result')
+        return compile_preset_request(request, presets=presets, inventory=inventory)
     _fields(request, ('schema_version', 'fps', 'encoding', 'expected_count', 'operations'))
     if type(request['schema_version']) is not int or request['schema_version'] != SCHEMA_VERSION:
         raise ContractError('schema_version must be integer 1')
@@ -150,16 +159,80 @@ def compile_request(request):
     if len(operations) > MAX_OPERATIONS:
         raise ContractError('operations exceeds the local %d-operation resource bound' % MAX_OPERATIONS)
     steps = []
+    catalog = None
+    control_inventory = inventory.get('inventory', inventory) if isinstance(inventory, dict) else None
+    if any(isinstance(op, dict) and op.get('op') in ('set_control', 'set_channel_name', 'set_input_route', 'set_output_route', 'set_group_assignment') for op in operations):
+        if control_inventory is None:
+            raise ContractError('non-Cue writes require --inventory from a fresh native inventory result')
+        catalog = normalize_inventory(control_inventory)
+    simulated_controls = {}
+    simulated_names = {}
     for position, operation in enumerate(operations):
         if not isinstance(operation, dict) or not isinstance(operation.get('op'), str):
             raise ContractError('each operation must be an object with a string op')
         op = operation['op']
-        if op in ('load', 'new_session') and len(operations) != 1:
-            raise ContractError('load/new_session must be the only operation; loaded counts are opaque')
+        if op in ('load', 'new_session', 'export_session') and len(operations) != 1:
+            raise ContractError('load/new_session/export_session must be the only operation')
         if op in ('save', 'save_as') and position != len(operations) - 1:
             raise ContractError('save/save_as must be the final operation')
         step = {'op': op}
-        if op == 'create':
+        if op == 'export_session':
+            _fields(operation, ('op', 'source', 'destination'), label=op)
+            source = session_path(operation['source'])
+            destination = session_path(operation['destination'])
+            if len(source.encode('ascii')) > 127:
+                raise ContractError('native transfer source path exceeds its 127-byte ShortString')
+            if source.casefold() == destination.casefold():
+                raise ContractError('export source and destination must differ')
+            step.update(source=source, destination=destination, frames=[])
+        elif op == 'set_input_route':
+            _fields(operation, ('op', 'channel_id', 'source'), ('route_kind', 'insert_index'), op)
+            route = plan_input_route(inventory, operation['channel_id'], operation['source'], route_kind=operation.get('route_kind', 'main'), insert_index=operation.get('insert_index', 0))
+            step.update(route)
+            step['frames'] = [build_packet(category=8, control_id=bytes.fromhex(route['id']), list_index=0, payload=bytes.fromhex(route['control_contract']['payload_hex'])).hex()]
+        elif op == 'set_output_route':
+            _fields(operation, ('op', 'channel_id', 'destination', 'connected'), label=op)
+            route = plan_output_route(inventory, operation['channel_id'], operation['destination'], operation['connected'])
+            step.update(route)
+            step['frames'] = [build_packet(category=8, control_id=bytes.fromhex(route['id']), list_index=0, payload=bytes.fromhex(route['control_contract']['payload_hex'])).hex()]
+        elif op == 'set_group_assignment':
+            _fields(operation, ('op', 'channel_id', 'group_channel_id', 'enabled'), label=op)
+            assignment = plan_group_assignment(inventory, operation['channel_id'], operation['group_channel_id'], operation['enabled'])
+            step.update(assignment)
+            step['frames'] = [build_packet(category=8, control_id=bytes.fromhex(assignment['id']), list_index=0, payload=bytes.fromhex(assignment['control_contract']['payload_hex'])).hex()]
+        elif op == 'set_control':
+            _fields(operation, ('op', 'id', 'value'), ('expected',), op)
+            key = operation['id'].lower() if isinstance(operation['id'], str) else operation['id']
+            item = next((c for c in catalog['controls'] if c['id'] == key), None)
+            if item is None:
+                raise ContractError('control id does not exist in the native inventory')
+            expected = operation.get('expected', simulated_controls.get(key, item['current_value']))
+            if expected is None:
+                raise ContractError('control has no finite current value for compare-before-write')
+            contract = plan_control_write(catalog, key, operation['value'], expected)
+            row = item['source']
+            contract.update(control_pointer=row.get('pointer'), owner_module_pointer=row.get('owner_module_pointer'))
+            step.update(id=key, control_contract=contract, frames=[build_packet(category=8, control_id=bytes.fromhex(key), list_index=0, payload=bytes.fromhex(contract['payload_hex'])).hex()])
+            simulated_controls[key] = contract['value']
+        elif op == 'set_channel_name':
+            _fields(operation, ('op', 'channel_id', 'name'), label=op)
+            channel_id = _integer(operation['channel_id'], 'channel_id', high=65535)
+            matches = [c for c in control_inventory.get('channels', []) if c.get('id') == channel_id]
+            if len(matches) != 1:
+                raise ContractError('channel_id must exist exactly once in the inventory')
+            channel = matches[0]
+            names = [c for c in catalog['controls'] if c['parameter'] == 255 and c['raw_type'] == 4 and int.from_bytes(bytes.fromhex(c['id'])[3:5], 'little') == channel_id]
+            if not names:
+                raise ContractError('no native channel-name controller was found')
+            name_control = sorted(names, key=lambda c: c['id'])[0]
+            encoded = encode_name(operation['name'], encoding)
+            step.update(channel_id=channel_id, name=operation['name'], name_hex=encoded.hex(), expected_name_hex=simulated_names.get(channel_id, channel['name_hex']), channel_pointer=channel['pointer'], id=name_control['id'], control_contract={
+                'control_pointer': name_control['source']['pointer'], 'owner_module_pointer': name_control['source']['owner_module_pointer'],
+                'module_vmt_rva': name_control['module_vmt_rva'], 'process_output_rva': name_control['process_output_rva'],
+                'definition_raw_hex': name_control['definition']['raw_hex'], 'definition_rva': name_control['source'].get('definition_rva'), 'raw_type': 4,
+            }, frames=[build_packet(category=8, control_id=bytes.fromhex(name_control['id']), list_index=0, payload=_string_body(encoded)).hex()])
+            simulated_names[channel_id] = encoded.hex()
+        elif op == 'create':
             _fields(operation, ('op', 'index', 'name'), ('timecode',), 'create')
             if count >= MAX_SNAPSHOT_COUNT:
                 raise ContractError('snapshot count would exceed the local %d-snapshot resource bound' % MAX_SNAPSHOT_COUNT)
@@ -212,11 +285,50 @@ def compile_request(request):
             raise ContractError('unsupported operation: %s' % op)
         step['expected_count_after'] = count
         steps.append(step)
-    return {
+    # Semantic routes bind whole output/buss sets and socket ownership. Reject
+    # overlapping plans before sending instead of discovering stale postconditions
+    # after an earlier step has already changed that same set.
+    semantic_scopes = set()
+    # Native mode callbacks can start resend/timer work and alter parameter
+    # domains. Finish that request, then inventory again before sibling writes.
+    numeric_steps = [step for step in steps if step['op'] == 'set_control']
+    for mode_step in numeric_steps:
+        raw_id = bytes.fromhex(mode_step['id'])
+        is_mode = (raw_id[:2] == bytes((4, 4)) or raw_id[:3] in (bytes((0x3a, 5, 0)), bytes((0x0b, 5, 3))))
+        if is_mode and any(other is not mode_step and other['control_contract']['owner_module_pointer'] == mode_step['control_contract']['owner_module_pointer'] for other in numeric_steps):
+            raise ContractError('mode changes and sibling controls require separate requests with a fresh inventory')
+    has_route = any(step['op'] in ('set_input_route', 'set_output_route') for step in steps)
+    if has_route and any(step['op'] == 'set_channel_name' for step in steps):
+        raise ContractError('routing and channel naming require separate requests with a fresh inventory between them')
+    for step in steps:
+        scopes = set()
+        if step['op'] in ('set_input_route', 'set_output_route'):
+            scopes.add('route-control:' + step['id'])
+            if step['op'] == 'set_output_route':
+                scopes.add('output-set:' + str(step['channel_id']))
+                scopes.add('physical-output:' + str(step['destination']['source_module_pointer']))
+            elif step.get('route_kind') == 'insert_send':
+                for endpoint in (step.get('source'), step.get('route_contract', {}).get('previous_endpoint')):
+                    if endpoint:
+                        scopes.add('physical-output:' + str(endpoint['source_module_pointer']))
+        if step['op'] == 'set_group_assignment':
+            scopes.add('buss-set:' + str(step['channel_id']))
+        if step['op'] == 'set_control':
+            raw_id = bytes.fromhex(step['id'])
+            if raw_id[:2] == bytes((9, 3)):
+                scopes.add('buss-set:' + str(int.from_bytes(raw_id[3:5], 'little')))
+        if scopes & semantic_scopes:
+            raise ContractError('overlapping routing/buss scopes require separate requests and a fresh inventory')
+        semantic_scopes.update(scopes)
+    result = {
         'schema_version': SCHEMA_VERSION, 'mode': 'execute', 'fps': fps,
         'encoding': encoding, 'expected_count': request['expected_count'], 'steps': steps,
         'final_expected_count': count, 'runtime_acceptance_verified': False,
     }
+    if catalog is not None:
+        source_state = inventory.get('after', {}) if isinstance(inventory, dict) else {}
+        result['control_inventory_binding'] = {'inventory_sha256': catalog['inventory_sha256'], 'session_path': source_state.get('current_session_path')}
+    return result
 
 
 def atomic_json(path, document, *, exclusive=False):
@@ -276,14 +388,16 @@ def _stage_native_resources(skill_root, parent):
     script = skill_root / 'scripts' / 'windows_native.ps1'
     if script.is_symlink() or not script.is_file() or assets.is_symlink() or not assets.is_dir():
         raise ContractError('bundled Windows runner/assets are missing or are symlinks')
-    sources = [script]
+    sources = sorted((skill_root / 'scripts').glob('*.ps1'))
+    if script not in sources:
+        raise ContractError('bundled Windows runner is missing')
+    if any(source.is_symlink() or not source.is_file() for source in sources):
+        raise ContractError('bundled PowerShell modules must be self-contained regular files')
     for source in sorted(assets.rglob('*')):
         if source.is_symlink():
             raise ContractError('bundled assets must be self-contained regular files, not symlinks')
         if source.is_file():
             sources.append(source)
-    if len(sources) == 1:
-        raise ContractError('bundled assets directory contains no files')
     parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix='digico-native-runtime-', dir=str(parent)))
     resources = []
@@ -307,6 +421,7 @@ def _stage_native_resources(skill_root, parent):
         raise ContractError('%s; runtime staging retained at %s' % (error, stage)) from error
 
 
+@locked_target
 def invoke_windows(plan, *, vm, executable, result_path, process_id=None):
     """Execute the bundled runner only after CLI authorization and plan validation."""
     result_path = Path(result_path)
@@ -368,7 +483,7 @@ def invoke_windows(plan, *, vm, executable, result_path, process_id=None):
         encoded = base64.b64encode(wrapper.encode('utf-16le')).decode('ascii')
         if not native_windows and len(encoded) >= PARALLELS_WRAPPER_LIMIT:
             raise ContractError('encoded Parallels wrapper exceeds the local 5000-character bound; choose a shorter visible result directory')
-        completed = subprocess.run(command_prefix + [encoded], capture_output=True, text=True, timeout=600, check=False)
+        completed = subprocess.run(command_prefix + [encoded], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=600, check=False)
         if not result_path.is_file():
             raise ContractError('Windows runner returned without a result file (exit %d); acceptance is unknown: %s' % (completed.returncode, completed.stderr.strip() or completed.stdout.strip()))
         result = read_json(result_path)
@@ -385,6 +500,9 @@ def invoke_windows(plan, *, vm, executable, result_path, process_id=None):
             if result['status'] == 'error':
                 result['error'] = '%s; runtime staging retained at %s' % (result.get('error') or 'Windows runner error', stage)
         return result
+    except subprocess.TimeoutExpired as error:
+        location = '; runtime staging retained at %s' % stage if stage is not None else ''
+        raise ContractError('Windows runner timed out; acceptance is unknown. Inspect this request/result and the target before retrying' + location) from error
     except (ContractError, ValueError, TypeError, KeyError, OSError, subprocess.SubprocessError) as error:
         if stage is not None:
             raise ContractError('%s; runtime staging retained at %s' % (error, stage)) from error
@@ -397,24 +515,99 @@ def main(argv=None):
     plan_parser = commands.add_parser('plan', help='validate a request and construct packets without contacting Windows')
     plan_parser.add_argument('--request', type=Path, required=True)
     plan_parser.add_argument('--output', type=Path)
+    plan_parser.add_argument('--inventory', type=Path)
+    plan_parser.add_argument('--presets', type=Path)
     execute_parser = commands.add_parser('execute', help='dry-run by default; --send explicitly invokes the local Windows runner')
     execute_parser.add_argument('--request', type=Path, required=True)
     execute_parser.add_argument('--send', action='store_true')
+    execute_parser.add_argument('--inventory', type=Path)
+    execute_parser.add_argument('--presets', type=Path)
     inspect_parser = commands.add_parser('inspect', help='invoke the runner in read-only inspection mode')
     inspect_parser.add_argument('--encoding', choices=ENCODINGS, default='ascii',
                                 help='explicit name-decoding encoding; raw bytes are retained (default: ascii)')
-    for sub in (execute_parser, inspect_parser):
+    status_parser = commands.add_parser('status', help='read the original loopback TCP2029 status response; send no application payload')
+    inventory_parser = commands.add_parser('inventory', help='read native channel/module/control/routing structures without network or memory writes')
+    meters_parser = commands.add_parser('meters', help='read copied native meter registry/output state; no meter writes or audio simulation')
+    presets_parser = commands.add_parser('presets', help='read native processing Preset metadata and optional stored content')
+    presets_parser.add_argument('--encoding', choices=('ascii', 'cp950'), default='ascii')
+    presets_parser.add_argument('--content-index', action='append', type=int, default=[])
+    structure_parser = commands.add_parser('structure', help='read and decode the native 123-byte Session structure; no restructuring setter')
+    structure_parser.add_argument('--encoding', choices=('ascii', 'cp950'), default='ascii')
+    meters_parser.add_argument('--encoding', choices=ENCODINGS, default='ascii')
+    meters_parser.add_argument('--channel-id', type=lambda value: int(value, 0))
+    meters_parser.add_argument('--limit', type=int, default=256)
+    for sub in (status_parser, inventory_parser):
+        sub.add_argument('--encoding', choices=ENCODINGS, default='ascii')
+    inventory_parser.add_argument('--full-output', action='store_true', help='also print the complete inventory; the result file always contains it')
+    inventory_parser.add_argument('--channel-id', type=lambda value: int(value, 0), help='read one raw native uint16 channel ID, such as 0x0100')
+    inventory_parser.add_argument('--without-response-tables', action='store_true', help='omit copied numeric curves for a faster structural inventory')
+    inventory_parser.add_argument('--include-physical-sources', action='store_true', help='include fitted physical socket endpoints with a filtered channel inventory')
+    inventory_parser.add_argument('--include-group-outputs', action='store_true', help='include observed Group Output metadata with a filtered inventory')
+    routes_parser = commands.add_parser('routes', help='resolve fitted physical routing endpoints from an existing local inventory')
+    routes_parser.add_argument('--inventory', type=Path, required=True)
+    routes_parser.add_argument('--direction', choices=('input', 'output'), default='input')
+    routes_parser.add_argument('--output', type=Path)
+    catalog_parser = commands.add_parser('catalog', help='query typed controls from an existing local inventory; no Windows or network access')
+    catalog_parser.add_argument('--inventory', type=Path, required=True)
+    catalog_parser.add_argument('--output', type=Path)
+    catalog_parser.add_argument('--channel-id', type=lambda value: int(value, 0))
+    catalog_parser.add_argument('--module', type=lambda value: int(value, 0))
+    catalog_parser.add_argument('--query', default='')
+    catalog_parser.add_argument('--writable-only', action='store_true')
+    catalog_parser.add_argument('--limit', type=int, default=100)
+    for sub in (execute_parser, inspect_parser, status_parser, inventory_parser, meters_parser, presets_parser, structure_parser):
         sub.add_argument('--vm', required=True)
         sub.add_argument('--exe', required=True)
         sub.add_argument('--process-id', type=int)
         sub.add_argument('--result', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == 'inspect':
-            plan = {'schema_version': SCHEMA_VERSION, 'mode': 'inspect', 'fps': 25, 'encoding': args.encoding}
+        if args.command == 'routes':
+            catalog = build_routing_catalog(read_json(args.inventory), direction=args.direction)
+            if args.output:
+                atomic_json(args.output, catalog)
+            print(json.dumps(catalog, ensure_ascii=False, indent=2, allow_nan=False))
+            return 0
+        if args.command == 'catalog':
+            document = read_json(args.inventory)
+            source = document.get('inventory', document)
+            catalog = normalize_inventory(source)
+            if args.output:
+                atomic_json(args.output, catalog)
+            entries = catalog['controls']
+            if args.channel_id is not None:
+                _integer(args.channel_id, 'channel_id', high=65535)
+                entries = [item for item in entries if int.from_bytes(bytes.fromhex(item['id'])[3:5], 'little') == args.channel_id]
+            if args.module is not None:
+                _integer(args.module, 'module', high=255)
+                entries = [item for item in entries if item['module_type'] == args.module]
+            if args.query:
+                entries = [item for item in entries if args.query.casefold() in item['name'].casefold()]
+            if args.writable_only:
+                entries = [item for item in entries if item['writable_candidate']]
+            limit = _integer(args.limit, 'limit', 1, 1000)
+            fields = ('id', 'name', 'units', 'value_units', 'display_units', 'verified_conversion', 'module_type', 'band', 'channel', 'channel_type', 'raw_type', 'payload_type', 'current_value', 'range', 'allowed_values', 'writable_candidate', 'readonly_reason')
+            print(json.dumps({'schema_version': 1, 'total_controls': len(catalog['controls']), 'matching_controls': len(entries), 'returned_controls': min(limit, len(entries)), 'runtime_acceptance_verified': False, 'controls': [{key: item.get(key) for key in fields} for item in entries[:limit]]}, ensure_ascii=False, indent=2, allow_nan=False))
+            return 0
+        if args.command in ('inspect', 'status', 'inventory', 'meters', 'presets', 'structure'):
+            plan = {'schema_version': SCHEMA_VERSION, 'mode': args.command, 'fps': 25, 'encoding': args.encoding}
+            if args.command == 'inventory':
+                plan['include_response_tables'] = not args.without_response_tables
+                plan['include_physical_sources'] = args.include_physical_sources
+                plan['include_group_outputs'] = args.include_group_outputs
+                if args.channel_id is not None:
+                    plan['channel_id'] = _integer(args.channel_id, 'channel_id', high=65535)
+            if args.command == 'meters':
+                plan['limit'] = _integer(args.limit, 'limit', 1, 1000)
+                if args.channel_id is not None:
+                    plan['channel_id'] = _integer(args.channel_id, 'channel_id', high=65535)
+            if args.command == 'presets':
+                plan['content_indices'] = [_integer(index, 'content index', high=9999) for index in args.content_index]
         else:
             request = read_json(args.request)
-            plan = compile_request(request)
+            inventory = read_json(args.inventory) if args.inventory else None
+            presets = read_json(args.presets) if args.presets else None
+            plan = compile_request(request, inventory, presets)
         if args.command == 'plan':
             if args.output:
                 atomic_json(args.output, plan)
@@ -424,7 +617,15 @@ def main(argv=None):
         else:
             result = invoke_windows(plan, vm=args.vm, executable=args.exe,
                                     result_path=args.result, process_id=args.process_id)
-        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+        output = result
+        if args.command == 'structure' and result.get('status') == 'ok':
+            result['structure'] = decode_structure_readback(result['structure'])
+        if args.command == 'inventory' and not args.full_output and result.get('status') == 'ok':
+            data = result.get('inventory', {})
+            output = {key: result[key] for key in ('status', 'request_sha256', 'process_id', 'runtime_stage_path') if key in result}
+            output.update(result_path=str(args.result), inventory={key: data.get(key) for key in ('group_count', 'channel_count', 'module_count', 'controller_count', 'unknown_node_count', 'structure_verified', 'io_inventory_complete')})
+            output['session'] = {key: result.get('after', {}).get(key) for key in ('current_session_path', 'fps', 'snapshot_count')}
+        print(json.dumps(output, ensure_ascii=False, indent=2, allow_nan=False))
         if result.get('status') == 'error':
             return 2
     except (ContractError, ValueError, TypeError, KeyError, OSError, subprocess.SubprocessError) as error:

@@ -13,3 +13,26 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -s tests -v
+  powershell-contracts:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p test_target_lock.py -v
+      - name: Parse native helpers and run synthetic readers
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $scripts=Join-Path $PWD 'skills/digico-native-session/scripts'
+          Get-ChildItem "$scripts/*.ps1" | ForEach-Object {
+            $tokens=$null; $parseErrors=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$parseErrors)
+            if($parseErrors.Count){throw ($parseErrors | Out-String)}
+          }
+          & ./tests/native_status_parser_tests.ps1 -StatusModulePath "$scripts/native_status.ps1"
+          & ./tests/native_transfer_parser_tests.ps1 -TransferModulePath "$scripts/native_transfer.ps1"
+          & ./tests/native_presets_readback_tests.ps1 -PresetModulePath "$scripts/native_presets.ps1"
+          & ./tests/native_preset_adapter_tests.ps1 -AdapterModulePath "$scripts/native_preset_adapter.ps1" -PresetModulePath "$scripts/native_presets.ps1"
+          & ./tests/native_structure_readback_tests.ps1 -StructureModulePath "$scripts/native_structure.ps1"
