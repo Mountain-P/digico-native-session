@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "fps": 25,
+  "encoding": "ascii",
+  "expected_count": 0,
+  "operations": [
+    {
+      "op": "create",
+      "index": "append",
+      "name": "Cue A",
+      "timecode": "00:01:00:00"
+    },
+    {
+      "op": "create",
+      "index": "append",
+      "name": "Cue B",
+      "timecode": "00:02:00:00"
+    },
+    {
+      "op": "save_as",
+      "path": "C:\\DiGiCoWork\\CueDemo_01.ses"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DiGiCo 原生 Session 控制"
+  short_description: "用原生 TCP 建立 Session、增刪改 Snapshot、設定時間碼與儲存載入"
+  default_prompt: "使用 $digico-native-session，以原生 TCP 建立 Session、編輯 Snapshot 並設定時間碼。"

@@ -1,0 +1,15 @@
+No Session template is included in this public repository.
+
+Provide your own Quantum1 V2126 Session with the structure/routing you want,
+25fps, and zero Snapshots. From the skill directory, run:
+
+python3 scripts/configure_template.py --source /absolute/path/to/your-empty-session.ses
+
+Configuration checks the model/version header and file hash only. It does not
+connect to Windows or prove that the Session is empty. The native new_session
+operation must load it and read back zero Snapshots and 25fps before saving.
+
+Generated .ses and empty-template.json files are local data and are ignored by
+Git. Do not add your show files or runtime traces to the public repository.
+
+Inspecting or editing an existing Session does not require a configured template.

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "fps": 25,
+  "encoding": "ascii",
+  "expected_count": 0,
+  "operations": [
+    {
+      "op": "new_session",
+      "path": "C:\\DiGiCoWork\\NewShow_01.ses"
+    }
+  ]
+}

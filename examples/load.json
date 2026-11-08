@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "fps": 25,
+  "encoding": "ascii",
+  "expected_count": 2,
+  "operations": [
+    {
+      "op": "load",
+      "path": "C:\\DiGiCoWork\\CueDemo_01.ses"
+    }
+  ]
+}

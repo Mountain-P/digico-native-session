@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "fps": 25,
+  "encoding": "ascii",
+  "expected_count": 2,
+  "operations": [
+    {
+      "op": "create",
+      "index": 1,
+      "name": "Cue Insert",
+      "timecode": "00:01:30:00"
+    },
+    {
+      "op": "rename",
+      "index": 0,
+      "name": "Cue A Revised"
+    },
+    {
+      "op": "timecode",
+      "index": 2,
+      "timecode": "00:02:30:00"
+    },
+    {
+      "op": "delete",
+      "index": 1
+    },
+    {
+      "op": "save_as",
+      "path": "C:\\DiGiCoWork\\CueDemo_02.ses"
+    }
+  ]
+}

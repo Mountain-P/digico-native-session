@@ -1,0 +1,46 @@
+# Vendor software and local show data
+*.[sS][eE][sS]
+*.[eE][xX][eE]
+*.[dD][lL][lL]
+*.[mM][sS][iI]
+*.[mM][sS][iI][xX]
+*.[mM][sS][pP]
+*.cab
+*.7z
+*.zip
+*.pkg
+*.dmg
+*.pvm/
+**/empty-template.json
+**/assets/*.json
+
+# Runtime requests, results, traces, and scratch directories
+*.tx.bin
+*.rx.bin
+*.bin
+*.pcap
+*.pcapng
+*.result.json
+*.request.json
+request*.json
+result*.json
+inspect-*.json
+execute-*.json
+plan-*.json
+.local/
+work/
+runtime/
+evidence/
+data/
+outputs/
+logs/
+digico-native-runtime-*/
+**/runtime-resources.json
+
+# Python and desktop artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+Thumbs.db
