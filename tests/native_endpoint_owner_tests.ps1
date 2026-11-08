@@ -18,8 +18,16 @@ function Read-ChildEndpointLine($Process) {
     }
     return $line
 }
+function Write-ChildEndpointCommand($Process,[string]$Command) {
+    # Process.StandardInput's StreamWriter inherits the parent's console
+    # encoding and can emit a UTF-8 BOM. Never use/flush that writer here.
+    $encoding=[Text.Encoding]::GetEncoding(20127,[Text.EncoderExceptionFallback]::new(),[Text.DecoderExceptionFallback]::new())
+    $bytes=$encoding.GetBytes($Command+"`n")
+    $stream=$Process.StandardInput.BaseStream
+    $stream.Write($bytes,0,$bytes.Length);$stream.Flush()
+}
 function Send-ChildEndpointCommand($Process,[string]$Command) {
-    $Process.StandardInput.WriteLine($Command);$Process.StandardInput.Flush()
+    Write-ChildEndpointCommand $Process $Command
     return (Read-ChildEndpointLine $Process)
 }
 
@@ -38,24 +46,86 @@ try {
 
     $childCode=@'
 $ErrorActionPreference='Stop'
+[Console]::InputEncoding=[Text.UTF8Encoding]::new($false,$true)
+function Convert-ChildEndpointCommand([string]$Command,[bool]$FirstLine){
+    # Accommodate one stream preamble on the first line only. Do not Trim()
+    # whitespace, repeated BOMs, trailing BOMs or BOMs on subsequent commands.
+    if($FirstLine-and $Command.Length-gt 0-and [int]$Command[0]-eq 0xfeff){return $Command.Substring(1)}
+    return $Command
+}
+function Format-ChildEndpointCommand([string]$Command){
+    $points=[Collections.Generic.List[string]]::new()
+    for($i=0;$i-lt $Command.Length-and $points.Count-lt 16;$i++){
+        $value=[int]$Command[$i]
+        if([char]::IsHighSurrogate($Command[$i])-and $i+1-lt $Command.Length-and [char]::IsLowSurrogate($Command[$i+1])){
+            $value=[char]::ConvertToUtf32($Command,$i);$i++
+        }
+        $points.Add(('U+{0:X4}'-f $value))
+    }
+    return ('length='+$Command.Length+'; prefix codepoints='+($points-join ' '))
+}
+function Assert-ChildEndpointCommand([string]$Command){
+    # Even case-sensitive PowerShell comparisons can ignore Unicode format
+    # characters under culture comparison. IPC commands require exact bytes.
+    foreach($known in @('accept','close_client','close_listener','quit')){
+        if([string]::Equals($Command,$known,[StringComparison]::Ordinal)){return}
+    }
+    throw ('Unknown synthetic listener command; '+(Format-ChildEndpointCommand $Command))
+}
 $listener=$null;$accepted=$null
 try {
     $listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
     $listener.ExclusiveAddressUse=$true;$listener.Start()
     $port=([Net.IPEndPoint]$listener.LocalEndpoint).Port
     [Console]::Out.WriteLine((@{process_id=$PID;port=$port}|ConvertTo-Json -Compress));[Console]::Out.Flush()
+    $firstLine=$true
     while($true){
         $command=[Console]::ReadLine()
-        if($null-eq $command-or $command-eq 'quit'){break}
-        switch($command){
+        if($null-eq $command){break}
+        $command=Convert-ChildEndpointCommand $command $firstLine;$firstLine=$false
+        Assert-ChildEndpointCommand $command
+        if([string]::Equals($command,'quit',[StringComparison]::Ordinal)){break}
+        switch -CaseSensitive ($command){
             'accept'{$accepted=$listener.AcceptTcpClient();[Console]::Out.WriteLine('accepted');[Console]::Out.Flush()}
             'close_client'{if($accepted){$accepted.Dispose();$accepted=$null};[Console]::Out.WriteLine('client_closed');[Console]::Out.Flush()}
             'close_listener'{$listener.Stop();$listener=$null;[Console]::Out.WriteLine('listener_closed');[Console]::Out.Flush()}
-            default{throw 'Unknown synthetic listener command.'}
         }
     }
 }finally{if($accepted){$accepted.Dispose()};if($listener){$listener.Stop()}}
 '@
+    # Exercise the exact child parser without a process/socket: the fix must
+    # allow a single initial preamble and keep every other unknown command bad.
+    $tokens=$null;$parseErrors=$null
+    $childAst=[Management.Automation.Language.Parser]::ParseInput($childCode,[ref]$tokens,[ref]$parseErrors)
+    if($parseErrors.Count){throw ($parseErrors|Out-String)}
+    foreach($functionName in @('Convert-ChildEndpointCommand','Format-ChildEndpointCommand','Assert-ChildEndpointCommand')){
+        $node=$childAst.Find({param($n) $n-is [Management.Automation.Language.FunctionDefinitionAst]-and $n.Name-eq $functionName},$true)
+        if(-not $node){throw 'Synthetic listener command parser missing.'}
+        . ([scriptblock]::Create($node.Extent.Text))
+    }
+    $bom=[string][char]0xfeff
+    foreach($raw in @('accept',($bom+'accept'))){
+        $command=Convert-ChildEndpointCommand $raw $true
+        if(-not [string]::Equals($command,'accept',[StringComparison]::Ordinal)){throw 'First child command was not decoded exactly.'}
+        Assert-ChildEndpointCommand $command
+    }
+    foreach($sample in @(
+        [pscustomobject]@{Text=($bom+$bom+'accept');First=$true},
+        [pscustomobject]@{Text=($bom+'accept');First=$false},
+        [pscustomobject]@{Text=('accept'+$bom);First=$true},
+        [pscustomobject]@{Text=' accept';First=$true},
+        [pscustomobject]@{Text='accept ';First=$true},
+        [pscustomobject]@{Text='ACCEPT';First=$true}
+    )){
+        $command=Convert-ChildEndpointCommand $sample.Text $sample.First
+        $message=$null;try{Assert-ChildEndpointCommand $command}catch{$message=$_.Exception.Message}
+        if($null-eq $message-or $message-notlike '*Unknown synthetic listener command; length=*prefix codepoints=U+*'){
+            $details=[ordered]@{first_line=$sample.First;input=(Format-ChildEndpointCommand $sample.Text);normalized=(Format-ChildEndpointCommand $command);error=$message}
+            throw ('Unknown child command was normalized or lost its bounded codepoint diagnostic: '+($details|ConvertTo-Json -Compress))
+        }
+    }
+    $diagnostic=Format-ChildEndpointCommand ('x'*10000)
+    if(([regex]::Matches($diagnostic,'U\+[0-9A-F]+')).Count-ne 16-or $diagnostic.Length-gt 256){throw 'Unknown command diagnostic is not bounded.'}
     $start=[Diagnostics.ProcessStartInfo]::new()
     $start.FileName=(Get-Process -Id $PID).Path
     $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCode))
@@ -95,7 +165,7 @@ try {
     if($ownListener){$ownListener.Stop()}
     if($child){
         if($childStarted-and -not $child.HasExited){
-            try{$child.StandardInput.WriteLine('quit');$child.StandardInput.Flush()}catch{}
+            try{Write-ChildEndpointCommand $child 'quit'}catch{}
             if(-not $child.WaitForExit(2000)){$child.Kill();[void]$child.WaitForExit(2000)}
         }
         $child.Dispose()

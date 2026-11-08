@@ -38,7 +38,14 @@ jobs:
           & ./tests/native_preset_adapter_tests.ps1 -AdapterModulePath "$scripts/native_preset_adapter.ps1" -PresetModulePath "$scripts/native_presets.ps1"
           & ./tests/native_structure_readback_tests.ps1 -StructureModulePath "$scripts/native_structure.ps1"
           & ./tests/native_endpoint_parser_tests.ps1 -EndpointModulePath "$scripts/native_endpoint.ps1"
-          & ./tests/native_endpoint_owner_tests.ps1 -EndpointModulePath "$scripts/native_endpoint.ps1"
+          # Reproduce the redirected-stdin encoding used by GitHub's shell.
+          $endpointInputEncoding=[Console]::InputEncoding
+          try {
+            [Console]::InputEncoding=[Text.UTF8Encoding]::new($true)
+            & ./tests/native_endpoint_owner_tests.ps1 -EndpointModulePath "$scripts/native_endpoint.ps1"
+          } finally {
+            [Console]::InputEncoding=$endpointInputEncoding
+          }
           & ./tests/native_profile_tests.ps1 -ProfileModulePath "$scripts/native_profile.ps1"
           & ./tests/native_control_allowlist_tests.ps1 -ProfileModulePath "$scripts/native_profile.ps1" -ControlModulePath "$scripts/native_controls.ps1"
           & ./tests/native_journal_tests.ps1 -JournalModulePath "$scripts/native_journal.ps1"
