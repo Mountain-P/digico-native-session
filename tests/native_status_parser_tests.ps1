@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([string]$StatusModulePath='')
 $ErrorActionPreference='Stop'
-if (-not $StatusModulePath) { $StatusModulePath=Join-Path $PSScriptRoot '..\skill\digico-native-session\scripts\native_status.ps1' }
+if (-not $StatusModulePath) { $StatusModulePath=Join-Path $PSScriptRoot '..\skills\digico-native-session\scripts\native_status.ps1' }
 . $StatusModulePath
 
 function Assert-StatusTest([bool]$Condition,[string]$Message) { if (-not $Condition) { throw $Message } }
@@ -45,6 +45,11 @@ Assert-StatusThrows {ConvertFrom-DiGiCoNativeStatusBytes -Bytes $bad} 'Checksum 
 Assert-StatusThrows {ConvertFrom-DiGiCoNativeStatusBytes -Bytes ([byte[]]$raw[0..($raw.Length-2)])} 'Truncated stream accepted.'
 Assert-StatusThrows {ConvertFrom-DiGiCoNativeStatusBytes -Bytes ([byte[]]@())} 'Empty stream accepted.'
 Assert-StatusThrows {ConvertFrom-DiGiCoNativeStatusBytes -Bytes (New-SyntheticStatus -Version 2125)} 'Wrong protocol version accepted.'
+$v2242=New-SyntheticStatus -Version 2242
+Assert-StatusThrows {ConvertFrom-DiGiCoNativeStatusBytes -Bytes $v2242} '2242 was accepted under default2126.'
+$decoded2242=ConvertFrom-DiGiCoNativeStatusBytes -Bytes $v2242 -ExpectedVersion 2242
+Assert-StatusTest ($decoded2242.decoded.identity.protocol_version-eq 2242) 'Explicit2242 profile was rejected.'
+Assert-StatusThrows {ConvertFrom-DiGiCoNativeStatusBytes -Bytes $raw -ExpectedVersion 2242} '2126 was accepted under explicit2242.'
 Assert-StatusThrows {ConvertFrom-DiGiCoNativeStatusBytes -Bytes (New-SyntheticStatus -Options ([byte[]](0..26)))} 'Wrong option extent accepted.'
 $firstSize=[BitConverter]::ToInt32($raw,0)
 Assert-StatusThrows {ConvertFrom-DiGiCoNativeStatusBytes -Bytes ([byte[]]$raw[0..($firstSize-1)])} 'Missing status frames accepted.'

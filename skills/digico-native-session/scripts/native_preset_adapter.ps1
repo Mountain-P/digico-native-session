@@ -16,6 +16,9 @@ function Get-DiGiCoPresetAdapterFrame($Step) {
     return ,$frame
 }
 function Assert-DiGiCoPresetAdapterBinding($Request,$State) {
+    Assert-NativeBuildContract $Request
+    Assert-NativeBuildContract $State
+    Assert-NativeBuildContract $Request.preset_inventory_binding
     $binding=$Request.preset_inventory_binding
     if($null-eq $binding-or $State.preset_count-ne $binding.preset_count-or $State.list_pointer-ne $binding.list_pointer-or $State.metadata_sha256-cne $binding.metadata_sha256-or $State.scope_hex-cne $binding.scope_hex-or $State.current_session_path_hex-cne $binding.current_session_path_hex){throw 'Fresh Preset inventory/path/scope differs from compiled --presets; no operation was sent.'}
     if($null-ne $binding.selected_index){
@@ -167,6 +170,7 @@ function Invoke-DiGiCoPresetRequest {
     try {
         Connect-Native
         Assert-DiGiCoPresetAdapterBinding $Request (Read-DiGiCoNativePresets -TextEncoding $Request.encoding)
+        $journalIndex=0
         foreach($step in $Request.steps){
             Only-Loopback-Peers
             if((Fingerprint (Read-State))-cne (Fingerprint $cueBefore)){throw 'Unexpected concurrent Cue changes before Preset operation.'}
@@ -179,12 +183,15 @@ function Invoke-DiGiCoPresetRequest {
             $callback=$null;if(Has-DiGiCoPresetProperty $step 'processing_checks'){$callback=$checks}
             $expected=Assert-DiGiCoPresetEdit -Before $state -Step $step -ProcessingCheck $callback
             $Result['indeterminate_operation']=$step
+            if(Get-Command Start-NativeJournalStep -ErrorAction SilentlyContinue){Start-NativeJournalStep $step $journalIndex}
             Send-Bytes (Get-DiGiCoPresetAdapterFrame $step)
             $accepted=Wait-DiGiCoPresetEdit -Before $state -Step $step -Expected $expected -ProcessingCheck $callback
             $state=$accepted.state
             if((Fingerprint (Read-State))-cne (Fingerprint $cueBefore)){throw 'Cue fields changed during Preset operation.'}
             Assert-DiGiCoPresetAdapterProtectedContent $protected $state
             $Verified.Add([pscustomobject]@{op=$step.op;verified=$true;preset_count=$state.preset_count;scope_hex=$state.scope_hex;metadata_verified=$accepted.metadata_verified;stored_controller_subset_verified=$accepted.stored_controller_subset_verified;processing_verified=$accepted.processing_verified;audio_delivery_verified=$false})
+            if(Get-Command Complete-NativeJournalStep -ErrorAction SilentlyContinue){Complete-NativeJournalStep $Verified[$Verified.Count-1] (Read-State)}
+            $journalIndex++
             $Result.Remove('indeterminate_operation')
         }
         if($state.preset_count-ne $Request.final_expected_preset_count-or $state.scope_hex-cne $Request.final_expected_scope_hex){throw 'Preset request final count/scope differs.'}

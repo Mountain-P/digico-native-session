@@ -2,9 +2,11 @@
 import importlib.util
 from pathlib import Path
 import struct
+import sys
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'skills/digico-native-session/scripts/control_catalog.py'
+sys.path.insert(0, str(SCRIPT.parent))
 spec = importlib.util.spec_from_file_location('control_catalog', SCRIPT)
 c = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(c)
@@ -96,6 +98,48 @@ def eq_context_inventory(shape=1,band=0):
 
 
 class DefinitionTests(unittest.TestCase):
+    def test_identity_unit_requires_exact_seed_code_and_bounds(self):
+        from copy import deepcopy
+        original = inventory()
+        original['controllers'][0].update(module_vmt_rva=0x81e510, process_output_rva=0x832414)
+        row = c.normalize_inventory(original)['controls'][0]
+        self.assertEqual(row['verified_identity_units']['native_unit'], 'dB')
+        self.assertFalse(row['verified_identity_units']['physical_audio_verified'])
+        for kind in ('owner', 'descriptor', 'bounds'):
+            changed = deepcopy(original)
+            if kind == 'owner':
+                changed['controllers'][0]['module_vmt_rva'] += 4
+            elif kind == 'descriptor':
+                raw = bytearray.fromhex(changed['definitions'][0]['response_seed_raw_hex'])
+                raw[1] ^= 1
+                changed['definitions'][0]['response_seed_raw_hex'] = raw.hex()
+            else:
+                sh, points = seed(((0, -150.0), (255, 11.0)))
+                changed['definitions'][0].update(response_seed_raw_hex=sh, response_points=points)
+            self.assertIsNone(c.normalize_inventory(changed)['controls'][0]['verified_identity_units'])
+
+    def test_frequency_identity_is_exact_hz_contract_not_display_label(self):
+        value = inventory(parameter=5, module=4)
+        value['controllers'][0].update(module_vmt_rva=0x81bd7c, process_output_rva=0x82a938)
+        sh, points = seed(((0, 20.0), (255, 20000.0)), curve=6)
+        raw = bytearray.fromhex(sh)
+        raw[1:32] = bytes.fromhex('1500000000006b487a00487a00000000000000000000000000000000000000')
+        value['definitions'][0].update(response_seed_raw_hex=raw.hex(), response_points=points)
+        item = c.normalize_inventory(value)['controls'][0]
+        self.assertEqual(item['verified_identity_units']['native_unit'], 'Hz')
+        value['controllers'][0]['process_output_rva'] += 4
+        self.assertIsNone(c.normalize_inventory(value)['controls'][0]['verified_identity_units'])
+
+    def test_trim_identity_uses_the_native_minus40_plus60_seed(self):
+        value = inventory(parameter=1, module=1)
+        value['controllers'][0].update(module_vmt_rva=0x81aa44, process_output_rva=0x826848)
+        sh, points = seed(((0, -40.0), (255, 60.0)))
+        value['definitions'][0].update(response_seed_raw_hex=sh, response_points=points)
+        self.assertEqual(c.normalize_inventory(value)['controls'][0]['verified_identity_units']['native_unit'], 'dB')
+        sh, points = seed(((0, -40.0), (255, 40.0)))
+        value['definitions'][0].update(response_seed_raw_hex=sh, response_points=points)
+        self.assertIsNone(c.normalize_inventory(value)['controls'][0]['verified_identity_units'])
+
     def test_exact_packed_offsets_and_retained_bytes(self):
         raw = definition()
         parsed = c.parse_definition(raw)

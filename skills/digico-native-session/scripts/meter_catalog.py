@@ -4,12 +4,14 @@ The RPM helper exports tDMAList controller output+2C and secondary+50, not the
 ordinary scalar+18. These are cached native codes, with no audio/freshness proof.
 """
 from __future__ import annotations
+
+from build_profiles import build_value, profile_bound
 import math
 import re
 import struct
 
-TARGET_SHA256 = '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
-MANAGER_VMT_RVA = 0x7544A4
+TARGET_SHA256 = build_value('executable.sha256')
+MANAGER_VMT_RVA = build_value('addresses.hex_7544a4')
 
 
 class MeterError(ValueError):
@@ -62,7 +64,7 @@ def standard0_display(code,meter_kind):
     if not 2<=code<=255:
         return None
     return {'value':(code-255)/2.0,'unit':'native-display-dB',
-            'source_function_va':'0x75c964','standard':0,
+            'source_function_va':('0x%X' % build_value('addresses.hex_75c964')),'standard':0,
             'physical_dbfs_verified':False}
 
 
@@ -77,18 +79,19 @@ def _copied_scalar(value,label):
     return decoded
 
 
+@profile_bound(feature='meters', documents=('snapshot',), error_type=MeterError)
 def normalize_meter_snapshot(snapshot):
     """Validate the copied Read-NativeMeters result and derive bounded displays."""
     if not isinstance(snapshot,dict) or type(snapshot.get('schema_version')) is not int or snapshot['schema_version']!=1:
         raise MeterError('meter snapshot requires schema_version1')
-    if snapshot.get('executable_sha256')!=TARGET_SHA256:
+    if snapshot.get('executable_sha256')!=build_value('executable.sha256'):
         raise MeterError('meter executable does not match the exact V2126 profile')
     for key,wanted in (('memory_read_only',True),('structure_verified',True),
                        ('network_used',False),('ui_used',False),('physical_audio_verified',False)):
         if snapshot.get(key) is not wanted:
             raise MeterError('meter snapshot must report '+key+'='+str(wanted))
     manager=snapshot.get('manager')
-    if not isinstance(manager,dict) or manager.get('vmt_rva')!=MANAGER_VMT_RVA:
+    if not isinstance(manager,dict) or manager.get('vmt_rva')!=build_value('addresses.hex_7544a4'):
         raise MeterError('unknown native meter manager VMT')
     total=_int(manager.get('registered_count'),'registered count',0,200000)
     streams=_int(manager.get('stream_count'),'stream count',0,8192)
@@ -130,7 +133,7 @@ def normalize_meter_snapshot(snapshot):
             'output':primary,'secondary':secondary,'ordinary_current':ordinary,
             'display':display,'unit':'native-meter-code','freshness':'not_observable',
             'physical_audio_verified':False})
-    return {'schema_version':1,'executable_sha256':TARGET_SHA256,
+    return {'schema_version':1,'executable_sha256':build_value('executable.sha256'),
             'memory_read_only':True,'network_used':False,'ui_used':False,
             'physical_audio_verified':False,'values_atomic':False,
             'freshness':'not_observable','manager':dict(manager),'meters':meters,

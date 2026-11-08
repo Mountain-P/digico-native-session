@@ -23,7 +23,7 @@ import uuid
 MODERN_VERSION = '2026-07-28'
 LEGACY_VERSION = '2025-11-25'
 SUPPORTED_VERSIONS = [MODERN_VERSION, LEGACY_VERSION]
-SERVER_INFO = {'name': 'digico-native-session', 'version': '0.2.0'}
+SERVER_INFO = {'name': 'digico-native-session', 'version': '0.3.0'}
 MAX_MESSAGE_BYTES = 2 * 1024 * 1024
 MAX_RESULT_BYTES = 128 * 1024 * 1024
 ENCODINGS = ['ascii', 'cp950', 'utf-8']
@@ -31,7 +31,9 @@ CLI_PATH = Path(__file__).resolve().with_name('native_session.py')
 
 
 class ToolError(ValueError):
-    pass
+    def __init__(self, message, *, result_path=None):
+        super().__init__(message)
+        self.result_path = str(result_path) if result_path is not None else None
 
 
 class RpcError(ValueError):
@@ -68,6 +70,9 @@ CHANNEL_ID = {'type': 'integer', 'minimum': 0, 'maximum': 65535,
               'description': 'Raw native uint16 channel ID (e.g. 256 for 0x0100), not a logical channel index.'}
 NAME = {'type': 'string', 'minLength': 1, 'description': 'Strict chosen encoding, at most 31 bytes; never truncated.'}
 TC = {'type': 'string', 'pattern': r'^[0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{2}$'}
+BUILD_PROFILE = {'type': 'string', 'pattern': r'^[a-z0-9][a-z0-9-]{0,63}$',
+                 'description': 'Exact bundled verified build profile ID. Never admits a build by product name alone.'}
+LOCAL_JSON = {'type': 'string', 'description': 'Existing absolute local JSON artifact path.'}
 SOURCE_SOCKET = schema({key: {'type': 'integer', 'minimum': 0, 'maximum': 255}
                         for key in ('port_type', 'port_number', 'socket_index')},
                        ('port_type', 'port_number', 'socket_index'))
@@ -128,6 +133,7 @@ PRESET_SCHEMAS = [
 PRESET_NAMES = frozenset(item['properties']['op']['const'] for item in PRESET_SCHEMAS)
 OPERATIONS += PRESET_SCHEMAS
 REQUEST_SCHEMA = schema({'schema_version': {'type': 'integer', 'const': 1},
+                         'build_profile': BUILD_PROFILE,
                          'fps': {'type': 'integer', 'const': 25},
                          'encoding': {'type': 'string', 'enum': ENCODINGS},
                          'expected_count': INDEX,
@@ -138,12 +144,15 @@ PRESET_REQUEST_SCHEMA = schema({**REQUEST_SCHEMA['properties'],
     'encoding': {'type': 'string', 'enum': ['ascii', 'cp950']},
     'operations': {'type': 'array', 'minItems': 1, 'maxItems': 1,
                    'items': {'oneOf': PRESET_SCHEMAS}}}, REQUEST_SCHEMA['required'])
-READ_SCHEMA = schema({'encoding': {'type': 'string', 'enum': ENCODINGS, 'default': 'ascii'}})
-STRUCTURE_SCHEMA = schema({'encoding': {'type': 'string', 'enum': ['ascii', 'cp950'], 'default': 'ascii'}})
+READ_SCHEMA = schema({'encoding': {'type': 'string', 'enum': ENCODINGS, 'default': 'ascii'},
+                      'build_profile': BUILD_PROFILE})
+STRUCTURE_SCHEMA = schema({'encoding': {'type': 'string', 'enum': ['ascii', 'cp950'], 'default': 'ascii'},
+                           'build_profile': BUILD_PROFILE})
 PLAN_SCHEMA = schema({'request': REQUEST_SCHEMA,
                       'inventory_path': {'type': 'string', 'description': 'Absolute local JSON result path from a fresh native inventory.'},
                       'presets_path': {'type': 'string', 'description': 'Absolute local presets/preset_execute result path; required for any preset operation.'}}, ('request',))
 EXECUTE_SCHEMA = schema({**PLAN_SCHEMA['properties'],
+                        'build_profile': BUILD_PROFILE,
                         'send': {'type': 'boolean', 'default': False,
                                  'description': 'Only literal true executes. Omitted/false produces a dry-run plan.'}}, ('request',))
 INVENTORY_SCHEMA = schema({**READ_SCHEMA['properties'],
@@ -161,11 +170,39 @@ CATALOG_SCHEMA = schema({
     'limit': {'type': 'integer', 'minimum': 1, 'maximum': 1000, 'default': 25}}, ('inventory_path',))
 
 PRESETS_SCHEMA = schema({'encoding': {'type': 'string', 'enum': ['ascii', 'cp950'], 'default': 'ascii'},
+    'build_profile': BUILD_PROFILE,
     'content_indices': {'type': 'array', 'maxItems': 64, 'uniqueItems': True,
                         'items': PRESET_INDEX,
                         'description': 'Explicit indices whose copied processing content is needed, e.g. for a later scoped recall.'}})
 PRESET_EXECUTE_SCHEMA = schema({**EXECUTE_SCHEMA['properties'], 'request': PRESET_REQUEST_SCHEMA},
                                ('request', 'presets_path'))
+CHANNEL_SELECTOR = {'oneOf': [schema({'id': CHANNEL_ID}, ('id',)),
+    schema({'logical': {'type': 'integer', 'minimum': 0, 'maximum': 65535,
+                        'description': 'Copied inventory logical_channel, separate from the native raw ID.'},
+            'type': {'type': 'integer', 'minimum': 0, 'maximum': 255}}, ('logical',)),
+    schema({'name': {'type': 'string', 'minLength': 1,
+                     'description': 'Exact case-sensitive decoded channel name; ambiguous names reject.'},
+            'type': {'type': 'integer', 'minimum': 0, 'maximum': 255}}, ('name',))]}
+QUANTITY = schema({'value': {'type': 'number'},
+                   'unit': {'type': 'string', 'enum': ['native', 'Hz', 'dB', 'ms', 's'],
+                            'description': 'Explicit quantity; engineering units require verified native contracts.'}}, ('value', 'unit'))
+AUTHOR_REQUEST_SCHEMA = schema({'schema_version': {'type': 'integer', 'const': 1},
+    'kind': {'const': 'authoring'}, 'fps': {'type': 'integer', 'const': 25},
+    'encoding': {'type': 'string', 'enum': ENCODINGS}, 'expected_count': INDEX,
+    'operations': {'type': 'array', 'minItems': 1, 'maxItems': 1000, 'items': {'oneOf': [
+        operation('set', {'channel': CHANNEL_SELECTOR, 'parameter': {'type': 'string', 'minLength': 1},
+            'band': {'type': 'integer', 'minimum': 0, 'maximum': 255},
+            'value': QUANTITY, 'expected': QUANTITY}, ('channel', 'parameter', 'value')),
+        operation('rename', {'channel': CHANNEL_SELECTOR, 'name': NAME}, ('channel', 'name'))]}}},
+    ('schema_version', 'kind', 'fps', 'encoding', 'expected_count', 'operations'))
+AUTHOR_SCHEMA = schema({'request': AUTHOR_REQUEST_SCHEMA,
+                        'inventory_path': PLAN_SCHEMA['properties']['inventory_path']}, ('request', 'inventory_path'))
+AUTHOR_EXECUTE_SCHEMA = schema({**AUTHOR_SCHEMA['properties'], 'build_profile': BUILD_PROFILE,
+    'send': EXECUTE_SCHEMA['properties']['send']}, ('request', 'inventory_path'))
+PROFILE_SCHEMA = schema({'build_profile': BUILD_PROFILE})
+RECOVER_SCHEMA = schema({'journal_path': {'type': 'string',
+    'description': 'Existing absolute local native journal JSONL path. Report only; never replay.'},
+    'compiled_request_path': LOCAL_JSON}, ('journal_path',))
 
 
 def _tool(name, description, input_schema, read_only):
@@ -175,6 +212,10 @@ def _tool(name, description, input_schema, read_only):
 
 
 TOOLS = [
+    _tool('digico_profile', 'Describe one exact bundled verified build locally. No target, VM, or network access; does not admit candidate profiles.', PROFILE_SCHEMA, True),
+    _tool('digico_author', 'Preview named channel/parameter edits with explicit units against an existing local inventory. Pure local compilation; full plan stays private, with refresh barriers retained.', AUTHOR_SCHEMA, True),
+    _tool('digico_author_execute', 'Dry-run authoring by default. Literal send=true invokes ordered typed CLI stages against the configured target, refreshing inventories at every barrier. Stops on error/unknown outcomes without replay; full receipts stay private.', AUTHOR_EXECUTE_SCHEMA, False),
+    _tool('digico_recover', 'Read and verify a local native journal and optional compiled request. Returns a progress report and private artifact; no target access or automatic replay.', RECOVER_SCHEMA, True),
     _tool('digico_status', 'Read original local loopback status through the typed CLI. No application payload is sent.', READ_SCHEMA, True),
     _tool('digico_inspect', 'Read editor session state through read-only process memory. Returns a local artifact path and summary.', READ_SCHEMA, True),
     _tool('digico_structure', 'Read the native Session structure configuration through read-only process memory. Returns decoded configuration and its local artifact; no structure setter or memory-address arguments.', STRUCTURE_SCHEMA, True),
@@ -282,7 +323,8 @@ class Adapter:
         token = uuid.uuid4().hex
         request_path = self.work_dir / (token + '.request.json')
         result_path = self.work_dir / (token + '.result.json')
-        if request_path.exists() or result_path.exists():
+        if any(path.exists() for path in (request_path, result_path,
+                Path(str(result_path) + '.request.json'), Path(str(result_path) + '.journal.jsonl'))):
             raise ToolError('fresh artifact paths unexpectedly exist')
         return request_path, result_path
 
@@ -299,7 +341,7 @@ class Adapter:
             raise RpcError(-32602, 'Unknown tool: ' + str(name))
         validate(arguments, tool['inputSchema'])
         tool_mode = name.removeprefix('digico_')
-        mode = 'execute' if tool_mode == 'preset_execute' else tool_mode
+        mode = {'preset_execute': 'execute', 'author_execute': 'author-execute'}.get(tool_mode, tool_mode)
         operations = arguments.get('request', {}).get('operations', [])
         if any(step.get('op') == 'export_session' for step in operations) and len(operations) != 1:
             raise ToolError('export_session must be the only operation')
@@ -321,20 +363,33 @@ class Adapter:
             inventory_path = Path(inventory_path)
             if not inventory_path.is_absolute() or not inventory_path.is_file():
                 raise ToolError('inventory_path must be an existing absolute local JSON file')
+        local_inputs = {}
+        for key in ('journal_path', 'compiled_request_path'):
+            if key in arguments:
+                path = Path(arguments[key])
+                if not path.is_absolute() or not path.is_file():
+                    raise ToolError(key + ' must be an existing absolute local file')
+                if path.stat().st_size > (32 * 1024 * 1024 if key == 'journal_path' else MAX_RESULT_BYTES):
+                    raise ToolError(key + ' exceeds its local resource bound')
+                local_inputs[key] = path
         request_path, result_path = self._workspace()
         command = [sys.executable, str(self.cli_path), mode]
-        send = mode == 'execute' and arguments.get('send') is True
-        if mode in ('plan', 'execute'):
+        send = mode in ('execute', 'author-execute') and arguments.get('send') is True
+        if mode in ('plan', 'execute', 'author', 'author-execute'):
             self._write_new(request_path, arguments['request'])
             command += ['--request', str(request_path)]
             if inventory_path is not None:
                 command += ['--inventory', str(inventory_path)]
             if presets_path is not None:
                 command += ['--presets', str(presets_path)]
-            if mode == 'plan':
+            if mode in ('plan', 'author'):
                 command += ['--output', str(result_path)]
             elif send:
                 command.append('--send')
+        if mode == 'recover':
+            command += ['--journal', str(local_inputs['journal_path']), '--output', str(result_path)]
+            if 'compiled_request_path' in local_inputs:
+                command += ['--compiled-request', str(local_inputs['compiled_request_path'])]
         if mode == 'catalog':
             command += ['--inventory', str(inventory_path), '--limit', str(arguments.get('limit', 25))]
             for key, option in (('channel_id', '--channel-id'), ('module', '--module'), ('query', '--query')):
@@ -342,10 +397,12 @@ class Adapter:
                     command += [option, str(arguments[key])]
             if arguments.get('writable_only') is True:
                 command.append('--writable-only')
-        if mode not in ('plan', 'catalog'):
+        if mode not in ('plan', 'catalog', 'profile', 'author', 'recover'):
             command += ['--vm', self.vm, '--exe', self.executable, '--result', str(result_path)]
             if self.process_id is not None:
                 command += ['--process-id', str(self.process_id)]
+        if 'build_profile' in arguments:
+            command += ['--build-profile', arguments['build_profile']]
         if mode in ('status', 'inspect', 'structure', 'inventory', 'meters', 'presets'):
             command += ['--encoding', arguments.get('encoding', 'ascii')]
         if mode == 'inventory':
@@ -369,25 +426,31 @@ class Adapter:
                                          encoding='utf-8', errors='strict', timeout=self.timeout,
                                          check=False, shell=False, stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired as error:
-            raise ToolError('CLI timed out; execution acceptance is unknown. Inspect before retrying. Artifacts: ' + str(result_path)) from error
+            raise ToolError('CLI timed out; execution acceptance is unknown. Inspect before retrying. Artifacts: ' + str(result_path), result_path=result_path) from error
         except (OSError, UnicodeError) as error:
-            raise ToolError('CLI could not complete; acceptance is unknown. Artifacts: ' + str(result_path)) from error
+            raise ToolError('CLI could not complete; acceptance is unknown. Artifacts: ' + str(result_path), result_path=result_path) from error
         if completed.returncode != 0:
             # CLI stdout/stderr are diagnostic only. Never reinterpret failure as success.
+            if mode in ('author', 'author-execute', 'recover'):
+                # The workflow stdout can contain the full private plan and
+                # receipts. Keep it in its artifact, not an MCP error preview.
+                diagnostic = (completed.stderr or '').strip()[:800]
+                raise ToolError('Local %s CLI failed (exit %s); review the private artifacts before replanning. Artifacts: %s. %s' %
+                                (mode, completed.returncode, result_path, diagnostic), result_path=result_path)
             detail = (completed.stderr or completed.stdout or '').strip()[:800]
             raise ToolError('CLI failed (exit %s); acceptance is not confirmed. Artifacts: %s. %s' %
-                            (completed.returncode, result_path, detail))
+                            (completed.returncode, result_path, detail), result_path=result_path)
         try:
             stdout = parse_json(completed.stdout)
         except (ValueError, UnicodeError) as error:
             raise ToolError('CLI stdout was not a JSON result; acceptance is unknown. Artifacts: ' + str(result_path)) from error
         if not isinstance(stdout, dict) or stdout.get('status') == 'error' or stdout.get('error') is not None:
             raise ToolError('CLI reported an error; acceptance is not confirmed. Artifacts: ' + str(result_path))
-        if mode == 'execute' and not send:
+        if mode in ('execute', 'author-execute') and not send:
             if stdout.get('dry_run') is not True or stdout.get('windows_runner_invoked') is not False:
                 raise ToolError('CLI did not confirm dry-run isolation')
             self._write_new(result_path, stdout)
-        if mode == 'catalog':
+        if mode in ('catalog', 'profile'):
             self._write_new(result_path, stdout)
         result = _read_document(result_path)
         if mode in ('status', 'inspect', 'structure', 'inventory', 'meters', 'presets') or send:
@@ -397,17 +460,67 @@ class Adapter:
 
     @staticmethod
     def _summary(mode, result, request_path, result_path, send):
-        out = {'mode': mode, 'result_path': str(result_path), 'dry_run': mode == 'plan' or (mode == 'execute' and not send),
-               'windows_runner_invoked': mode in ('status', 'inspect', 'structure', 'inventory', 'meters', 'presets') or (mode == 'execute' and send),
-               'send_requested': send, 'read_only': mode in ('status', 'inspect', 'structure', 'inventory', 'meters', 'presets', 'catalog', 'plan')}
+        out = {'mode': mode, 'result_path': str(result_path), 'dry_run': mode in ('plan', 'author') or (mode in ('execute', 'author-execute') and not send),
+               'windows_runner_invoked': mode in ('status', 'inspect', 'structure', 'inventory', 'meters', 'presets') or (mode in ('execute', 'author-execute') and send),
+               'send_requested': send, 'read_only': mode in ('status', 'inspect', 'structure', 'inventory', 'meters', 'presets', 'catalog', 'plan', 'profile', 'author', 'recover')}
         if result.get('mode') is not None and result['mode'] != mode:
             out['compiled_mode'] = result['mode']
         if request_path.exists():
             out['request_path'] = str(request_path)
-        for key in ('status', 'request_sha256', 'process_id', 'runtime_stage_path',
+        for key in ('status', 'request_sha256', 'process_id', 'runtime_stage_path', 'build_profile', 'executable_sha256',
                     'runtime_acceptance_verified', 'memory_read_only', 'ui_used', 'transport'):
             if key in result:
                 out[key] = result[key]
+        if mode == 'profile':
+            if (result.get('target_called') is not False or result.get('network_used') is not False
+                    or not isinstance(result.get('features'), dict)
+                    or not isinstance(result.get('build_profile'), str)
+                    or not isinstance(result.get('executable_sha256'), str)
+                    or re.fullmatch('[0-9a-f]{64}', result['executable_sha256']) is None):
+                raise ToolError('Profile result lacks the exact local-only bundled metadata contract')
+            for key in ('model', 'release', 'validation', 'features', 'target_called', 'network_used'):
+                out[key] = result.get(key)
+        if mode == 'recover':
+            if (result.get('target_called') is not False or result.get('network_used') is not False
+                    or result.get('automatic_replay_allowed') is not False
+                    or result.get('hash_chain_verified') is not True):
+                raise ToolError('Recovery result lacks the verified read-only/no-replay contract')
+            for key in ('hash_chain_verified', 'tail_incomplete', 'request_outcome',
+                        'network_used', 'target_called', 'automatic_replay_allowed', 'fresh_state_required', 'next_action'):
+                out[key] = result.get(key)
+            for key in ('verified_operation_indices', 'indeterminate_operation_indices'):
+                values = result.get(key)
+                if not isinstance(values, list):
+                    raise ToolError('Recovery result is missing operation indices')
+                out[key] = values[:1000]
+                out[key + '_count'] = len(values)
+            out['response_truncated'] = any(len(result[key]) > 1000 for key in ('verified_operation_indices', 'indeterminate_operation_indices'))
+        if mode in ('author', 'author-execute'):
+            plan = result.get('initial_plan', result)
+            if (not isinstance(plan, dict) or plan.get('kind') != 'authoring_plan'
+                    or not isinstance(plan.get('stages'), list) or not isinstance(plan.get('changes'), list)
+                    or plan.get('values_atomic') is not False or plan.get('runtime_acceptance_verified') is not False):
+                raise ToolError('Authoring result is missing its staged plan')
+            stages, changes = plan['stages'], plan['changes']
+            out['authoring'] = {'stage_count': len(stages), 'operation_count': len(changes),
+                'fully_compiled': plan.get('fully_compiled'),
+                'values_atomic': False, 'runtime_acceptance_verified': False,
+                'stages': [{key: stage.get(key) for key in ('index', 'status', 'reason', 'barrier_before', 'operation_indices')}
+                           for stage in stages[:100]],
+                'changes': [{key: change[key] for key in ('operation_index', 'stage_index', 'op', 'id',
+                    'parameter_name', 'current', 'intended', 'intended_native', 'changed', 'validation') if key in change}
+                            for change in changes[:25]],
+                'response_truncated': len(stages) > 100 or len(changes) > 25}
+            if send:
+                if (result.get('kind') != 'authoring_workflow_result' or result.get('auto_replay') is not False
+                        or result.get('atomic') is not False or result.get('callback_receipts_complete') is not True):
+                    raise ToolError('Authoring workflow lacks complete receipts and the non-atomic/no-replay contract')
+                for key in ('completed_stages', 'total_stages', 'attempted_stages',
+                            'verified_operation_count', 'failure_phase', 'next_stage_index',
+                            'auto_replay', 'atomic', 'work_dir', 'intent_path'):
+                    if key in result:
+                        out[key] = result[key]
+                out['artifact_count'] = len(result.get('artifacts', []))
         if 'steps' in result:
             out['operation_count'] = len(result['steps'])
             out['operations'] = [step.get('op') for step in result['steps']]
@@ -589,7 +702,7 @@ class Server:
                 self.legacy_initialized = True
                 result = {'protocolVersion': LEGACY_VERSION, 'capabilities': {'tools': {'listChanged': False}},
                           'serverInfo': SERVER_INFO,
-                          'instructions': 'Local Quantum1 V2126 only. Changes dry-run unless send=true; inspect artifacts after uncertain outcomes.'}
+                          'instructions': 'Configured local verified build only. Exact profile capabilities and control contracts gate changes. Changes dry-run unless send=true; inspect artifacts after uncertain outcomes.'}
             else:
                 # Legacy ping is permitted before the initialization exchange.
                 version = (LEGACY_VERSION if method == 'ping' and not params.get('_meta')
@@ -616,6 +729,8 @@ class Server:
                                   'structuredContent': summary, 'isError': False}
                     except ToolError as error:
                         summary = {'error': str(error), 'runtime_acceptance_verified': False}
+                        if error.result_path is not None:
+                            summary['result_path'] = error.result_path
                         result = {'content': [{'type': 'text', 'text': json.dumps(summary, ensure_ascii=False)}],
                                   'structuredContent': summary, 'isError': True}
                 else:

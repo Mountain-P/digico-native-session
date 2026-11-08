@@ -2,7 +2,10 @@
 [CmdletBinding()]
 param([string]$StructureModulePath='')
 $ErrorActionPreference='Stop'
-if(-not $StructureModulePath){$StructureModulePath=Join-Path $PSScriptRoot '..\skill\digico-native-session\scripts\native_structure.ps1'}
+if(-not $StructureModulePath){$StructureModulePath=Join-Path $PSScriptRoot '..\skills\digico-native-session\scripts\native_structure.ps1'}
+$SkillRoot=Split-Path (Split-Path $StructureModulePath -Parent) -Parent
+. (Join-Path $SkillRoot 'scripts\native_profile.ps1')
+$null=Set-NativeBuildProfile -ExecutableSha256 '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
 . $StructureModulePath
 function Assert-StructureTest([bool]$Condition,[string]$Message){if(-not $Condition){throw $Message}}
 function Assert-StructureThrows([scriptblock]$Action,[string]$Message){$failed=$false;try{& $Action|Out-Null}catch{$failed=$true};Assert-StructureTest $failed $Message}

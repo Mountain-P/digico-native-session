@@ -18,13 +18,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 
 from mirror_codec import build_packet
-from control_catalog import normalize_inventory, plan_control_write
+from control_catalog import normalize_inventory, plan_control_write, assert_control_write_allowed
 from routing_catalog import build_routing_catalog, plan_input_route, plan_output_route, plan_group_assignment
 from preset_adapter import is_preset_request, compile_preset_request
 from session_structure import decode_structure_readback
-from target_lock import locked_target
+from target_lock import locked_target, target_lock
+from operation_journal import read_journal, recovery_report
+from build_profiles import select_profile, profile_for_document, profile_identity, use_profile, stamp_profile
+from authoring import compile_authoring_request, authoring_catalog
+from authoring_workflow import run_authoring
 
 SCHEMA_VERSION = 1
 ENCODINGS = ('ascii', 'cp950', 'utf-8')
@@ -138,13 +143,39 @@ def _string_body(raw):
 
 
 def compile_request(request, inventory=None, presets=None):
+    requested = request.get('build_profile') if isinstance(request, dict) else None
+    profile = select_profile(build_profile=requested) if requested is not None else None
+    for artifact in (inventory, presets):
+        if artifact is not None:
+            profile = profile_for_document(artifact, expected=profile)
+    profile = profile or select_profile()
+    feature_by_operation = {'set_control':'control_write', 'set_channel_name':'control_write',
+        'set_input_route':'routes', 'set_output_route':'routes', 'set_group_assignment':'routes',
+        'save':'session_files', 'save_as':'session_files', 'load':'session_files',
+        'new_session':'template', 'export_session':'transfer',
+        'create':'snapshots', 'delete':'snapshots', 'rename':'snapshots', 'timecode':'snapshots'}
+    candidate_operations = request.get('operations') if isinstance(request, dict) else None
+    for operation in candidate_operations if isinstance(candidate_operations, list) else ():
+        if isinstance(operation, dict):
+            name = operation.get('op', '')
+            if not isinstance(name, str):
+                continue
+            feature = 'presets' if name.startswith('preset_') else feature_by_operation.get(name)
+            if feature and profile['features'].get(feature) is not True:
+                raise ContractError('Selected build has no verified support for ' + feature)
+    with use_profile(profile['executable']['sha256'], build_profile=profile['id']):
+        return stamp_profile(_compile_request(request, inventory, presets), profile)
+
+
+def _compile_request(request, inventory=None, presets=None):
     """Validate the entire request and simulate indices before returning any plan."""
     import struct
     if is_preset_request(request):
         if presets is None:
             raise ContractError('Preset writes require --presets from a fresh native presets result')
-        return compile_preset_request(request, presets=presets, inventory=inventory)
-    _fields(request, ('schema_version', 'fps', 'encoding', 'expected_count', 'operations'))
+        preset_request = {key:value for key,value in request.items() if key != 'build_profile'}
+        return compile_preset_request(preset_request, presets=presets, inventory=inventory)
+    _fields(request, ('schema_version', 'fps', 'encoding', 'expected_count', 'operations'), ('build_profile',))
     if type(request['schema_version']) is not int or request['schema_version'] != SCHEMA_VERSION:
         raise ContractError('schema_version must be integer 1')
     fps = request['fps']
@@ -225,11 +256,16 @@ def compile_request(request, inventory=None, presets=None):
             if not names:
                 raise ContractError('no native channel-name controller was found')
             name_control = sorted(names, key=lambda c: c['id'])[0]
+            assert_control_write_allowed(name_control['id'], raw_type=4,
+                definition_rva=name_control['source'].get('definition_rva'),
+                module_vmt_rva=name_control['module_vmt_rva'],
+                process_output_rva=name_control['process_output_rva'])
             encoded = encode_name(operation['name'], encoding)
             step.update(channel_id=channel_id, name=operation['name'], name_hex=encoded.hex(), expected_name_hex=simulated_names.get(channel_id, channel['name_hex']), channel_pointer=channel['pointer'], id=name_control['id'], control_contract={
                 'control_pointer': name_control['source']['pointer'], 'owner_module_pointer': name_control['source']['owner_module_pointer'],
                 'module_vmt_rva': name_control['module_vmt_rva'], 'process_output_rva': name_control['process_output_rva'],
                 'definition_raw_hex': name_control['definition']['raw_hex'], 'definition_rva': name_control['source'].get('definition_rva'), 'raw_type': 4,
+                'response_pointer_binding': name_control.get('response_pointer_binding'),
             }, frames=[build_packet(category=8, control_id=bytes.fromhex(name_control['id']), list_index=0, payload=_string_body(encoded)).hex()])
             simulated_names[channel_id] = encoded.hex()
         elif op == 'create':
@@ -327,7 +363,7 @@ def compile_request(request, inventory=None, presets=None):
     }
     if catalog is not None:
         source_state = inventory.get('after', {}) if isinstance(inventory, dict) else {}
-        result['control_inventory_binding'] = {'inventory_sha256': catalog['inventory_sha256'], 'session_path': source_state.get('current_session_path')}
+        result['control_inventory_binding'] = {'inventory_sha256': catalog['inventory_sha256'], 'session_path': source_state.get('current_session_path'), 'process_id': inventory.get('process_id'), 'image_base': control_inventory.get('image_base')}
     return result
 
 
@@ -433,7 +469,7 @@ def invoke_windows(plan, *, vm, executable, result_path, process_id=None):
     if not script_path.is_file():
         raise ContractError('bundled windows_native.ps1 is missing')
     request_path = result_path.with_name(result_path.name + '.request.json')
-    if result_path.exists() or request_path.exists():
+    if result_path.exists() or request_path.exists() or Path(str(result_path) + '.journal.jsonl').exists():
         raise ContractError('--result and its .request.json must both be new paths')
     skill_root = script_path.parent.parent
     stage = None
@@ -480,6 +516,22 @@ def invoke_windows(plan, *, vm, executable, result_path, process_id=None):
         if process_id is not None:
             wrapper += ' -ProcessId %d' % process_id
         wrapper += '\n'
+        if not native_windows:
+            # Parallels Tools can reject otherwise valid large command lines.
+            # Keep the complete receipt/request gates in a visible stage file;
+            # the short bootstrap authenticates that exact file before running
+            # it. Never retry a guest invocation after an uncertain outcome.
+            launch_path = stage / 'invoke.ps1'
+            with launch_path.open('x', encoding='utf-8', newline='\n') as stream:
+                stream.write(wrapper)
+                stream.flush()
+                os.fsync(stream.fileno())
+            launch_hash = hashlib.sha256(launch_path.read_bytes()).hexdigest()
+            wrapper = ("$ErrorActionPreference='Stop';$p=%s;"
+                       "if((Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant()-cne '%s')"
+                       "{throw 'Runtime launcher hash mismatch'};"
+                       "& ([scriptblock]::Create([IO.File]::ReadAllText($p)))\n") % (
+                           _ps_quote(mac_guest_path(launch_path)), launch_hash)
         encoded = base64.b64encode(wrapper.encode('utf-16le')).decode('ascii')
         if not native_windows and len(encoded) >= PARALLELS_WRAPPER_LIMIT:
             raise ContractError('encoded Parallels wrapper exceeds the local 5000-character bound; choose a shorter visible result directory')
@@ -512,6 +564,20 @@ def invoke_windows(plan, *, vm, executable, result_path, process_id=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
+    recover_parser = commands.add_parser('recover', help='inspect flushed operation receipts; does not call or replay a target')
+    recover_parser.add_argument('--journal', type=Path, required=True)
+    recover_parser.add_argument('--compiled-request', type=Path)
+    recover_parser.add_argument('--output', type=Path)
+    author_parser = commands.add_parser('author', help='preview named channel/parameter edits with explicit units and refresh barriers')
+    author_parser.add_argument('--request', type=Path, required=True)
+    author_parser.add_argument('--inventory', type=Path, required=True)
+    author_parser.add_argument('--output', type=Path)
+    author_execute_parser = commands.add_parser('author-execute', help='dry-run named edits; --send executes ordered stages with fresh inventories')
+    author_execute_parser.add_argument('--request', type=Path, required=True)
+    author_execute_parser.add_argument('--inventory', type=Path, required=True)
+    author_execute_parser.add_argument('--send', action='store_true')
+    profiles_parser = commands.add_parser('profile', help='describe one bundled verified build without calling a target')
+    profiles_parser.add_argument('--build-profile')
     plan_parser = commands.add_parser('plan', help='validate a request and construct packets without contacting Windows')
     plan_parser.add_argument('--request', type=Path, required=True)
     plan_parser.add_argument('--output', type=Path)
@@ -555,13 +621,81 @@ def main(argv=None):
     catalog_parser.add_argument('--query', default='')
     catalog_parser.add_argument('--writable-only', action='store_true')
     catalog_parser.add_argument('--limit', type=int, default=100)
-    for sub in (execute_parser, inspect_parser, status_parser, inventory_parser, meters_parser, presets_parser, structure_parser):
+    for sub in (execute_parser, author_execute_parser, inspect_parser, status_parser, inventory_parser, meters_parser, presets_parser, structure_parser):
+        sub.add_argument('--build-profile', help='select a bundled verified profile; omitted readers bind the actual executable hash')
         sub.add_argument('--vm', required=True)
         sub.add_argument('--exe', required=True)
         sub.add_argument('--process-id', type=int)
         sub.add_argument('--result', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'recover':
+            result = recovery_report(read_journal(args.journal), compiled_request_path=args.compiled_request)
+            if args.output:
+                atomic_json(args.output, result)
+            print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+            return 0
+        if args.command == 'profile':
+            profile = select_profile(build_profile=args.build_profile)
+            result = {**profile_identity(profile), 'model': profile['model'], 'release': profile['release'],
+                      'validation': dict(profile['validation']), 'features': dict(profile['features']),
+                      'network_used': False, 'target_called': False}
+            print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+            return 0
+        if args.command == 'author':
+            result = compile_authoring_request(read_json(args.request), read_json(args.inventory))
+            if args.output:
+                atomic_json(args.output, result)
+            print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+            return 0
+        if args.command == 'author-execute':
+            request, inventory = read_json(args.request), read_json(args.inventory)
+            preview = compile_authoring_request(request, inventory)
+            profile = profile_for_document(inventory)
+            if args.build_profile and profile['id'] != args.build_profile:
+                raise ContractError('--build-profile differs from the authoring inventory')
+            if not args.send:
+                result = {**preview, 'dry_run': True, 'network_used': False, 'windows_runner_invoked': False}
+            else:
+                result_path = args.result
+                request_path = Path(str(result_path)+'.request.json')
+                if not result_path.is_absolute() or result_path.exists() or request_path.exists():
+                    raise ContractError('author-execute requires a fresh absolute --result and .request.json')
+                work_dir = result_path.parent/('author-'+uuid.uuid4().hex[:12])
+                work_dir.mkdir(parents=True, mode=0o700)
+                atomic_json(request_path, {'schema_version':1, 'kind':'authoring_workflow_intent',
+                            'request':request, 'work_dir':str(work_dir)}, exclusive=True)
+                artifacts = []
+                # The entire workflow holds one host lease. Nested native calls
+                # use the undecorated implementation under this existing lease.
+                invoke_under_lease = invoke_windows.__wrapped__
+                def execute_raw(raw, current, index):
+                    plan = compile_request(raw, current)
+                    path = work_dir/('stage-%03d.json'%index)
+                    artifacts.append({'kind':'execute','stage':index,'path':str(path)})
+                    value = invoke_under_lease(plan, vm=args.vm, executable=args.exe,
+                                      result_path=path, process_id=args.process_id)
+                    return value
+                def refresh_inventory(ids, index):
+                    values=[]
+                    for channel_id in ids:
+                        plan={'schema_version':1,'mode':'inventory','fps':request['fps'],
+                              'encoding':request['encoding'],'channel_id':channel_id,
+                              'include_response_tables':True,'include_physical_sources':False,
+                              'include_group_outputs':False,**profile_identity(profile)}
+                        path=work_dir/('refresh-%03d-%04x.json'%(index,channel_id))
+                        artifacts.append({'kind':'inventory','stage':index,'channel_id':channel_id,'path':str(path)})
+                        value=invoke_under_lease(plan, vm=args.vm, executable=args.exe,
+                                      result_path=path, process_id=args.process_id)
+                        values.append(value)
+                    return values
+                with target_lock(vm=args.vm, executable=args.exe):
+                    result=run_authoring(request, inventory, execute_raw, refresh_inventory)
+                result.update(work_dir=str(work_dir), artifacts=artifacts, intent_path=str(request_path),
+                              dry_run=False, atomic=False)
+                atomic_json(result_path,result,exclusive=True)
+            print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+            return 0 if result.get('status','ok')=='ok' else 2
         if args.command == 'routes':
             catalog = build_routing_catalog(read_json(args.inventory), direction=args.direction)
             if args.output:
@@ -591,6 +725,8 @@ def main(argv=None):
             return 0
         if args.command in ('inspect', 'status', 'inventory', 'meters', 'presets', 'structure'):
             plan = {'schema_version': SCHEMA_VERSION, 'mode': args.command, 'fps': 25, 'encoding': args.encoding}
+            if args.build_profile:
+                plan.update(profile_identity(select_profile(build_profile=args.build_profile)))
             if args.command == 'inventory':
                 plan['include_response_tables'] = not args.without_response_tables
                 plan['include_physical_sources'] = args.include_physical_sources
@@ -605,9 +741,17 @@ def main(argv=None):
                 plan['content_indices'] = [_integer(index, 'content index', high=9999) for index in args.content_index]
         else:
             request = read_json(args.request)
+            if args.command == 'execute' and args.build_profile:
+                if not isinstance(request, dict):
+                    raise ContractError('request must be a JSON object')
+                if request.get('build_profile') not in (None, args.build_profile):
+                    raise ContractError('--build-profile differs from the request build_profile')
+                request = {**request, 'build_profile': args.build_profile}
             inventory = read_json(args.inventory) if args.inventory else None
             presets = read_json(args.presets) if args.presets else None
             plan = compile_request(request, inventory, presets)
+            if args.command == 'execute' and args.build_profile and plan['build_profile'] != args.build_profile:
+                raise ContractError('--build-profile differs from the compiled request/inventory')
         if args.command == 'plan':
             if args.output:
                 atomic_json(args.output, plan)

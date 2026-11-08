@@ -2,7 +2,11 @@
 [CmdletBinding()]
 param([string]$TransferModulePath='')
 $ErrorActionPreference='Stop'
-if (-not $TransferModulePath) { $TransferModulePath=Join-Path $PSScriptRoot '..\skill\digico-native-session\scripts\native_transfer.ps1' }
+if (-not $TransferModulePath) { $TransferModulePath=Join-Path $PSScriptRoot '..\skills\digico-native-session\scripts\native_transfer.ps1' }
+$SkillRoot=Split-Path (Split-Path $TransferModulePath -Parent) -Parent
+. (Join-Path $SkillRoot 'scripts\native_profile.ps1')
+$profile=Set-NativeBuildProfile -ExecutableSha256 '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d' -BuildProfile 'quantum1-v2126'
+Assert-NativeBuildFeature 'transfer'
 . $TransferModulePath
 
 function Assert-TransferTest([bool]$Condition,[string]$Message) { if (-not $Condition) { throw $Message } }
@@ -10,6 +14,11 @@ function Assert-TransferThrows([scriptblock]$Action,[string]$Message) {
     $failed=$false;try{& $Action|Out-Null}catch{$failed=$true}
     Assert-TransferTest $failed $Message
 }
+# The fake addresses below model exactly the legacy executable. Select it here
+# rather than inheriting another test's (or the caller's) selected profile.
+Assert-TransferTest ($profile.id-ceq 'quantum1-v2126'-and
+    $profile.addresses.hex_126e670-eq 0x126E670-and
+    $profile.layouts.network_peer.active_transfer-eq 0x125) 'Transfer fixture source profile/addresses changed.'
 function New-TransferTestFrame([int]$Subcommand,[byte[]]$Body,[int]$FileType=3,[int]$CommandId=0,[int]$HeaderByte9=0) {
     if ($Body.Length-lt 2) {$Body=$Body+(New-Object byte[] (2-$Body.Length))}
     $packet=New-Object byte[] (18+$Body.Length)
@@ -111,15 +120,18 @@ Assert-TransferThrows {Assert-DiGiCoTransferPath 'C:\Synthetic\Source.ses' 10} '
 
 # Read-only mock peer-table/save-worker checks; no process is opened.
 $base=0;$script:worker=$null;$script:transferPointer=0
+$script:transferReadAddresses=[Collections.Generic.List[long]]::new()
 function Only-Loopback-Peers {}
 function Read-SaveWorker {return $script:worker}
 $reader=[pscustomobject]@{}
 $reader|Add-Member -MemberType ScriptMethod -Name U32 -Value {
     param([long]$Address)
+    $script:transferReadAddresses.Add($Address)
     switch($Address){0x126E670{return 1000};1004{return 2000};2000{return 3000};0xCDD{return $script:transferPointer};default{throw "Unexpected mock read $Address"}}
 }
 $reader|Add-Member -MemberType ScriptMethod -Name I32 -Value {param([long]$Address) if($Address-eq 1008){return 1};throw 'Unexpected mock count read.'}
 Assert-DiGiCoTransferIdle
+Assert-TransferTest (($script:transferReadAddresses.ToArray()-join ',')-ceq '19326576,1004,2000,3293') 'Transfer preflight did not follow the selected legacy manager/peer source addresses.'
 $script:worker=[pscustomobject]@{finished=1;terminated=0}
 Assert-TransferThrows {Assert-DiGiCoTransferIdle} 'Finished but nonterminated save worker accepted.'
 $script:worker=[pscustomobject]@{finished=1;terminated=1}

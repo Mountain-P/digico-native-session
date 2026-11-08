@@ -1,62 +1,67 @@
 ---
 name: digico-native-session
-description: 以 DiGiCo 原生 TCP 在 Windows Quantum1 V2126 離線編輯器管理 Session、混音參數、路由與 Preset，讀取控制目錄、Session 結構、狀態及電平，並提供 MCP；保留 Snapshot 編輯與 25fps timecode 功能。支援 Mac Parallels，唯讀記憶體驗證；不用 OSC 或 UI，不適用實體控台或其他版本。
+description: 以 DiGiCo 原生 TCP 管理已驗證 exact build 的 Windows Quantum1／2／3／5／7／8 離線編輯器 Session、Snapshot 與 allowlist 混音控制；提供 inventory、structure、meters、authoring、journal recovery 及 MCP。舊 Q1 V2126 另保留 routing、Preset、transfer；支援 Mac Parallels、唯讀記憶體驗證，不用 OSC 或 UI，不適用實體控台。
 ---
 
 # DiGiCo 原生 Session 與混音控制
 
-使用隨附 `scripts/native_session.py`，以原生 TCP 修改離線編輯器，再用唯讀 `ReadProcessMemory` 驗證實際狀態。規劃不連線；執行必須帶 `execute --send`。工具不安裝軟體、不啟動 VM、不更改防火牆、不操作 UI，也不寫程序記憶體。
+使用隨附 `scripts/native_session.py`，以原生 TCP 修改離線編輯器，再用唯讀 `ReadProcessMemory` 驗證。離線規劃不連線；`execute`／`author-execute` 必須明列 `--send` 才送出。工具不安裝軟體、不啟動 VM、不更改 INI／防火牆／FPS、不操作 UI，也不寫程序記憶體。
 
-只支援 **Quantum1 V2126／25fps**，`Quantum1.exe` SHA-256 必須是：
+## 先選對 build 與能力
 
-```text
-535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d
-```
+只接納隨附 profile 的確切 EXE SHA-256，不以型號、檔名或版本號猜相容性：
 
-非 Cue 功能先讀 [混音、路由與唯讀資料](references/noncue.md)，MCP 接入讀 [MCP](references/mcp.md)。不要由模組名稱推定所有控制都能寫：以本次 inventory 的型別、原生定義、owner callback、enum／模式範圍與回讀結果為準。Preset 使用獨立請求，不混入 Session／Snapshot 操作；詳見 [Preset](references/presets.md)。
+| Profile | 範圍 |
+|---|---|
+| `quantum1-v2126` | 舊 Q1；保留已驗證的控制、Snapshot／檔案、routing、Preset、transfer、讀取功能。 |
+| `quantum1-v2242-4`、`quantum2-v2242-4` | Q1／Q2 V2242.4；新版共通能力。 |
+| `quantum3-v2242` | Q3 V2242（326／338）；新版共通能力。 |
+| `quantum5-v2242` | Q5 V2242，只包含升級 SD5。 |
+| `quantum7-v2242` | Q7 V2242 的 `SD7Q.exe`，不是一般 SD7。 |
+| `quantum8-v2242` | Q8 V2242；新版共通能力。 |
 
-先確認使用者要的起點：
+新版共通能力是 `inspect`／`inventory`／`structure`／`meters`、逐 build numeric／boolean／Input-name allowlist、Snapshot／25fps、SaveAs／Save／Load 與自己的零 Snapshot 範本。Routing／Preset／transfer 均關閉；新版 `status` 只開 Q1／Q8。Boolean 仍須獨立的 exact entry 與 enum domain，其他控制不可由顯示名稱或舊 Q1 成功案例自行解禁。Quantum638 尚無可核對的現行官方 offline download，維持未解決，不能用 Q8 冒充。
 
-- `new_session`：載入自己的同版、25fps、零 Snapshot 範本（公開版不附 Session；先依 operations reference 設定），再另存新檔；保留範本的結構與 routing，**不是 factory reset**。
-- 編輯目前 Session：以 `inspect` 的實際 count 與目前路徑為起點。
-- 使用其他範本：先單獨 `load` 明確指定的同版 `.ses`，再重新 inspect／plan。`new_session` 不接受任意範本參數。
+六個新版均已通過未修改公開 Windows runner 的隔離 typed 回歸，含範本、Snapshot、Save／Reload 及代表性控制／名稱持久化；不延伸為各款 CLI／MCP 傳輸均已實測。讀 [build profiles](references/build-profiles.md) 核對逐功能開關；`profile --build-profile <id>` 只顯示本機 metadata，不驗證正在執行的程序。Plan 的 request／artifact 都未選 profile 時預設舊 Q1；`execute --build-profile` 可補選省略 profile 的 raw request，明確的 request／inventory identity 衝突仍拒絕。新版範本設定應明列 profile。Authoring 從 inventory 選 profile，不另加 schema 以外欄位。實際 runner 仍重新驗 EXE hash、PID 與 contract。
 
 ## 工作流程
 
-若使用者只要離線規劃，可直接用其提供的 count 寫 request 並 `plan`，不需要 Windows／VM 或 inspect；註明 count 來自使用者、`runtime_acceptance_verified=false`。實際送出前才完成下列環境與回讀步驟。
+1. 實際操作前讀 [Windows／Parallels](references/windows-host.md)，確認既有編輯器、VM、EXE、當次 PID 及全新 result 路徑。只做離線規劃可使用使用者提供的 count，註明來源及 `runtime_acceptance_verified=false`。
+2. 用 `inspect` 讀當次 FPS、Snapshot count、raw name bytes、RecallAt、flags 與 Session 路徑；它不開原生 TCP。控制編輯再取得所需通道的 detailed inventory，不沿用舊 mode／value。
+3. Snapshot／Session 使用 [原始 request](references/operations.md)，依實際 count 填 `expected_count`，先 `plan` 再 `execute --send`。名稱／單位編輯使用 [authoring](references/authoring.md)：`author` 預覽，`author-execute` dry-run，明列 `--send` 才執行。
+4. Mode 操作要保留 stage 順序；每個 barrier 重新讀所需 raw channel IDs、嚴格合併同一 target 的 inventory，再重編已釘 ID 的下一階段。不得攤平成一次批次，或用舊模式 bounds 授權後續值。
+5. 查看本次 result 的 `status`、`verified_steps`／stage receipts 與 `after`。確認磁碟持久化時，另以獨立 request 原生 Load 並回讀。送包返回、可編譯或 writable candidate 都不能代替成功回讀。
 
-1. 準備實際執行時，讀 [Windows 執行環境](references/windows-host.md)，確認既有編輯器、明確 EXE 路徑與結果輸出位置。不可沿用舊 PID 或把範例路徑當成目前環境。
-2. **inspect**：送出前讀實際 FPS、Snapshot count、名稱 raw bytes、RecallAt、啟用旗標與 Session 路徑；此模式不連原生 TCP。
-3. 依 [request schema](references/operations.md) 寫原始 request。實際執行的 `expected_count` 填剛讀到的 count；離線規劃可使用上述 user-reported count。先 `plan` 完整驗證所有 index、名稱 bytes、timecode 與檔案路徑。
-4. **execute --send**：把同一份**原始 request**交給工具；不要把 `plan` 輸出的 `steps` 文件當作 request。每一步都必須通過實際回讀，才繼續下一步。
-5. 讀這一次的**全新 result**，確認 `status="ok"`、`verified_steps` 與 `after`。儲存需有新／更新且穩定的檔案、hash、目前路徑；需要確認磁碟持久化時，再以獨立 request 載入輸出檔並比對回讀。見 [驗證與失敗處理](references/validation.md)。
+非 Cue 語意與限制見 [混音／路由](references/noncue.md)，Preset 僅用其 [獨立 request](references/presets.md)。MCP 使用同一 typed CLI，寫入預設 dry-run，須 literal `send:true`；見 [MCP](references/mcp.md)。
 
-Mac／Parallels 範例；路徑與 VM 名稱只是範例，先替換成已確認值：
+合成的 Mac／Parallels 範例；VM、PID 與路徑必須換成已確認值：
 
 ```sh
 SKILL="$HOME/.codex/skills/digico-native-session"
 WORK="$HOME/Documents/DiGiCoWork"
 python3 "$SKILL/scripts/native_session.py" inspect \
-  --vm 'Windows 11' --exe 'C:\DiGiCo\Quantum1\Quantum1.exe' \
-  --encoding cp950 --result "$WORK/inspect-001.json"
-python3 "$SKILL/scripts/native_session.py" plan \
-  --request "$WORK/request.json" --output "$WORK/plan.json"
-python3 "$SKILL/scripts/native_session.py" execute \
-  --request "$WORK/request.json" --send \
-  --vm 'Windows 11' --exe 'C:\DiGiCo\Quantum1\Quantum1.exe' \
-  --result "$WORK/execute-001.json"
+  --build-profile quantum1-v2242-4 \
+  --vm 'Your Windows VM' --exe 'C:\DiGiCo\Quantum1\Quantum1.exe' \
+  --process-id 1234 --encoding ascii --result "$WORK/inspect-001.json"
 ```
 
-每個 `--result` 必須是絕對路徑，且該檔與其 `.request.json` 均尚不存在；不要重用舊結果。Mac請用home內的可見一般資料夾（例如`~/Documents`），任何dot-prefixed路徑component或檔名都會被拒絕。Skill可留在隱藏`.codex`目錄，runner/assets會先複製到result旁的唯一可見stage，詳見Windows reference。`execute` 省略 `--send` 只會輸出 dry-run JSON，不連 Windows／VM／網路，也不產生 runtime result 檔，但 CLI 仍要求填寫 target／result 參數。
+每個 `--result` 都必須是全新絕對路徑，其 `.request.json` 不能存在。Mac 使用 home 內可見的普通資料夾；Skill 可留在 `.codex`，runner／assets／profiles 會複製到 result 旁的獨立可見 stage，經 SHA 驗證後執行。不要重用既有 result、intent 或 journal。
 
-## 名稱與時間
+## Session 起點、名稱與時間
 
-- Snapshot 名稱上限是 **31 個編碼後 bytes**，不可默默截斷、替換或音譯。`ascii`、`cp950`、`utf-8` 都採嚴格編碼；中文 CP950 raw bytes 已通過原生儲存／重載，但 Windows ACP1252 下的中文 GUI 顯示尚未驗證。保留 `name_hex` 作為資料比對依據。
-- Timecode 用 `HH:MM:SS:FF`、25fps，`FF<25`；保留使用者順序，不自行依全域時間重新排序。內部 RecallAt 是 **quarter frames**，不是毫秒或 packed HHMMSSFF。
-- `create` 從目前 console state 建立 Snapshot；只有名稱與 RecallAt 會按 request 改動，不會自動為每段歌曲產生不同 routing、音量、BPM 或調性設定。
+- **目前 Session**：以 inspect 的實際 path／count 為起點，送出前後核對同一 Session、FPS、console 與必要 Snapshot 狀態。
+- **`new_session`**：先用 `configure_template.py --build-profile <id>` 匯入自己的同 build、25fps、零 Snapshot `.ses`。每個 profile 使用獨立 manifest；公開版不附 Session 或廠商軟體。匯入 header／hash 不證明 count0，原生載入回讀後才另存。這保留範本結構／routing，不是 factory reset。
+- **其他檔案**：先單獨 Load 明確的同版 `.ses`，再 inspect／plan。`new_session` 不接受任意範本參數。
+- **名稱**：最多31個 encoded bytes；ascii／cp950／utf-8 嚴格編碼，不截斷、不音譯。以 `name_hex` 比對；中文 GUI 顯示不在 raw bytes 保存證據內。
+- **RecallAt**：`HH:MM:SS:FF`、25fps、`FF<25`；內部為 quarter frames。保留使用者順序，不自行排序。`create` 從目前 console state 建立，不會自行產生各 Cue 的 mixer 設定。
+- **控制單位**：只用 profile／catalog 的驗證契約，不從顯示 label 猜百分比、samples、Hz、dB 或時間換算；未知／重名選擇必須拒絕。
 
-## 不確定結果
+## 中斷與證據
 
-若連線中斷、逾時、`status="error"` 或出現 `indeterminate_operation`，先用新的 `inspect` 回讀，再規劃剩餘工作。**不可盲目重送整批 create／delete**；它們會改變 count 與後續 index。已驗證操作邊界上的重連不等於可以重播結果不明的操作。若有 `recovery_stage_path`，保留該檔：目前Session可能仍指向alias／暫存範本，先確認實際路徑再恢復。
+Host target lock 與 [Windows guest lease](references/write-lease.md) 協調 writer；它們不阻止其他軟體／人工改動，也不提供原子交易。讀取可有界重試，編輯結果不明時不能重播。
 
-需要查核封包、位址或改版適用性時才讀 [確切協定與位址](references/protocol.md)。其他 EXE hash、FPS、實體控台與非 loopback 主機不屬於本技能已驗證能力，不能透過放寬 hash／改寫記憶體來冒充支援。
+Timeout、連線中斷、`status="error"`、不完整回讀或 `indeterminate_operation` 後，保留 result／compiled request／journal／runtime stage／authoring work directory。先用新的 inspect／inventory 確認，再規劃剩餘意圖。Create／delete 會改 count／index，不能重送整批。`recover` 是純本機 journal 報告，不操作目標也不重播。若有 `recovery_stage_path`，先確認目前 Session 是否仍指向 alias／暫存範本。詳見 [恢復](references/recovery.md) 及 [驗證](references/validation.md)。
+
+Mirror 只有有界被動 parser／ledger 與獨立 Verify 研究，`initial_sync_complete=false`；不得聲稱完整 Mirror 已完成或提供 raw socket／任意 host／Mirror 寫入。查位址與改版證據時才讀 [協定](references/protocol.md) 與 [Mirror 研究](references/mirroring-research.md)。
+
+矩陣外 build、其他 FPS、實體控台與實際音訊均未驗證；不可放寬 hash、修改 profile evidence 或寫程序記憶體來冒充支援。Runtime 產物可能含 show 資料，只留私人工作目錄，公開範例使用合成內容。

@@ -7,17 +7,20 @@ or turn this record into a Category2 setter; no such command is established.
 
 from __future__ import annotations
 
+from build_profiles import build_value, profile_bound
+
 import math
 import re
 import struct
 
 
 RECORD_BYTES = 123
-TARGET_SHA256 = '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
-RECORD_RVA = 0x127A17C
-ALIAS_SLOT_RVA = 0x8E9980
+TARGET_SHA256 = build_value('executable.sha256')
+RECORD_RVA = build_value('addresses.hex_127a17c')
+ALIAS_SLOT_RVA = build_value('addresses.hex_8e9980')
 
 
+@profile_bound(feature='structure', documents=(), error_type=ValueError)
 def decode_console_record(raw):
     if not isinstance(raw, (bytes, bytearray, memoryview)):
         raise TypeError('console record must be bytes-like')
@@ -29,8 +32,8 @@ def decode_console_record(raw):
         raise ValueError('console record contains nonfinite frequency/rate')
     return {
         'schema_version': 1, 'subsystem': 'native-session-structure-readonly',
-        'executable_sha256': TARGET_SHA256,
-        'record_rva': RECORD_RVA, 'record_bytes': RECORD_BYTES, 'raw_hex': raw.hex(),
+        'executable_sha256': build_value('executable.sha256'),
+        'record_rva': build_value('addresses.hex_127a17c'), 'record_bytes': RECORD_BYTES, 'raw_hex': raw.hex(),
         'stereo_mode_raw': raw[0],
         # Eight consecutive little-endian Word slots occupy each16-byte field.
         # This is raw structure inventory, without guessed mono/surround labels
@@ -51,6 +54,7 @@ def decode_console_record(raw):
     }
 
 
+@profile_bound(feature='structure', documents=('readback',), error_type=ValueError)
 def decode_structure_readback(readback):
     """Decode a validated native_structure.ps1 result, preserving RPM provenance.
 
@@ -61,9 +65,9 @@ def decode_structure_readback(readback):
         raise TypeError('structure readback must be an object')
     if (type(readback.get('schema_version')) is not int or readback['schema_version'] != 1
             or readback.get('subsystem') != 'native-session-structure-readonly'
-            or readback.get('executable_sha256') != TARGET_SHA256
-            or type(readback.get('alias_slot_rva')) is not int or readback['alias_slot_rva'] != ALIAS_SLOT_RVA
-            or type(readback.get('record_rva')) is not int or readback['record_rva'] != RECORD_RVA
+            or readback.get('executable_sha256') != build_value('executable.sha256')
+            or type(readback.get('alias_slot_rva')) is not int or readback['alias_slot_rva'] != build_value('addresses.hex_8e9980')
+            or type(readback.get('record_rva')) is not int or readback['record_rva'] != build_value('addresses.hex_127a17c')
             or type(readback.get('record_bytes')) is not int or readback['record_bytes'] != RECORD_BYTES):
         raise ValueError('structure readback differs from the exact V2126 profile')
     if any(readback.get(key) is not True for key in

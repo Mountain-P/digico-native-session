@@ -44,9 +44,11 @@ function ConvertFrom-DiGiCoNativeStatusBytes {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)][AllowEmptyCollection()][byte[]]$Bytes,
-        [ValidateSet('ascii','cp950','utf-8')][string]$TextEncoding='ascii'
+        [ValidateSet('ascii','cp950','utf-8')][string]$TextEncoding='ascii',
+        [ValidateRange(1,65535)][int]$ExpectedVersion=2126
     )
-    # Exact V2126 listener response: identity, session information, option bytes.
+    # The selected build owns the expected version; matching frame shapes alone
+    # never admit another version. Default preserves the legacy pure parser API.
     if ($Bytes.Length -eq 0 -or $Bytes.Length -gt 65536) { throw 'Native status response is empty or exceeds the local 65536-byte bound.' }
     $frames = [Collections.Generic.List[object]]::new()
     $offset = 0
@@ -78,11 +80,11 @@ function ConvertFrom-DiGiCoNativeStatusBytes {
         })
         $offset += [int]$size
     }
-    if ($frames.Count -ne 3) { throw 'Expected exactly three native V2126 status frames.' }
+    if ($frames.Count -ne 3) { throw 'Expected exactly three native status frames.' }
     for ($i=0; $i -lt 3; $i++) {
-        if ($frames[$i].category -ne 0 -or $frames[$i].subcommand -ne (@(1,2,7)[$i])) { throw 'Unexpected native V2126 status frame sequence.' }
+        if ($frames[$i].category -ne 0 -or $frames[$i].subcommand -ne (@(1,2,7)[$i])) { throw 'Unexpected native status frame sequence.' }
     }
-    if ($frames[0].version_or_group -ne 2126 -or $frames[1].version_or_group -ne 2126 -or $frames[2].version_or_group -ne 0) { throw 'Native status protocol version/profile mismatch.' }
+    if ($frames[0].version_or_group -ne $ExpectedVersion -or $frames[1].version_or_group -ne $ExpectedVersion -or $frames[2].version_or_group -ne 0) { throw 'Native status protocol version/profile mismatch.' }
     $identityBody = $frames[0]._body
     if ($identityBody.Length -lt 5) { throw 'Truncated native identity status.' }
     $advertisedName = Read-DiGiCoStatusShortString $identityBody 4 $TextEncoding
@@ -139,12 +141,13 @@ function Invoke-DiGiCoNativeStatus {
         [ValidateRange(100,30000)][int]$TimeoutMs=3000,
         [ValidateSet('ascii','cp950','utf-8')][string]$TextEncoding='ascii'
     )
+    Assert-NativeBuildFeature 'status'
     $client = $null
     $bytes = [IO.MemoryStream]::new()
     $timer = [Diagnostics.Stopwatch]::StartNew()
     try {
         $client = [Net.Sockets.TcpClient]::new()
-        $connect = $client.BeginConnect('127.0.0.1',2029,$null,$null)
+        $connect = $client.BeginConnect('127.0.0.1',[int]$script:NativeBuildProfile.transport.status_tcp_port,$null,$null)
         try {
             if (-not $connect.AsyncWaitHandle.WaitOne($TimeoutMs)) { throw 'Native status connection timed out.' }
             $client.EndConnect($connect)
@@ -160,10 +163,10 @@ function Invoke-DiGiCoNativeStatus {
             if (($bytes.Length+$n) -gt 65536) { throw 'Native status response exceeded the local 65536-byte bound.' }
             $bytes.Write($buffer,0,$n)
         }
-        $parsed = ConvertFrom-DiGiCoNativeStatusBytes -Bytes $bytes.ToArray() -TextEncoding $TextEncoding
+        $parsed = ConvertFrom-DiGiCoNativeStatusBytes -Bytes $bytes.ToArray() -TextEncoding $TextEncoding -ExpectedVersion ([int]$script:NativeBuildProfile.transport.protocol_version)
         $parsed | Add-Member -NotePropertyName transport -NotePropertyValue 'native-tcp-loopback'
         $parsed | Add-Member -NotePropertyName host_address -NotePropertyValue '127.0.0.1'
-        $parsed | Add-Member -NotePropertyName port -NotePropertyValue 2029
+        $parsed | Add-Member -NotePropertyName port -NotePropertyValue $script:NativeBuildProfile.transport.status_tcp_port
         $parsed | Add-Member -NotePropertyName application_bytes_sent -NotePropertyValue 0
         $parsed | Add-Member -NotePropertyName server_closed_connection -NotePropertyValue $true
         return $parsed

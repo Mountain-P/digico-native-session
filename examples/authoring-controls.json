@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "kind": "authoring",
+  "fps": 25,
+  "encoding": "ascii",
+  "expected_count": 0,
+  "operations": [
+    {
+      "op": "set",
+      "channel": {"type": 1, "logical": 1},
+      "parameter": "fader",
+      "value": {"value": -12, "unit": "native"}
+    },
+    {
+      "op": "set",
+      "channel": {"type": 1, "logical": 1},
+      "parameter": "eq.shape",
+      "band": 0,
+      "value": {"value": 4, "unit": "native"}
+    },
+    {
+      "op": "set",
+      "channel": {"type": 1, "logical": 1},
+      "parameter": "eq.q",
+      "band": 0,
+      "value": {"value": 0.8, "unit": "native"}
+    }
+  ]
+}

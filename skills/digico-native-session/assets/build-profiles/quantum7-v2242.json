@@ -1,0 +1,999 @@
+{
+  "schema_version": 1,
+  "id": "quantum7-v2242",
+  "family": "Quantum",
+  "model": "Quantum7",
+  "release": 2242,
+  "executable": {
+    "name": "SD7Q.exe",
+    "sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+    "pointer_size": 4,
+    "preferred_image_base": 4194304,
+    "image_size": 62824448,
+    "file_version": "22.0.0.2242"
+  },
+  "transport": {
+    "host": "127.0.0.1",
+    "tcp_port": 2028,
+    "udp_discovery_port": 2029,
+    "protocol_version": 2242,
+    "allowed_fps": [
+      25
+    ],
+    "status_tcp_port": 2029
+  },
+  "runtime": {
+    "console_global_rva": 18993860,
+    "snapshot_list_global_rva": 18971352,
+    "session_path_rva": 8868834,
+    "fps_rva": 8866368,
+    "network_manager_global_rva": 18990208,
+    "native_peer_active_rva": 8866420,
+    "session_load_result_rva": 18971552,
+    "save_worker_global_rva": 10046856,
+    "protocol_version_rva": 8863372,
+    "identity_name_rva": 8866498,
+    "snapshot_list_vmt_rva": 7033556,
+    "snapshot_vmt_rva": 7026860,
+    "save_worker_vmt_rva": 5448180
+  },
+  "addresses": {
+    "hex_126e368": 18990764,
+    "hex_126e3e8": 10047536,
+    "hex_126e3ec": 10047540,
+    "hex_126e670": 18990208,
+    "hex_127305c": 18971352,
+    "hex_1279cfc": 18993860,
+    "hex_127a158": 8863372,
+    "hex_127a17c": 8863408,
+    "hex_127ad30": 8866368,
+    "hex_127ad6e": 8866420,
+    "hex_127ad9c": 8866498,
+    "hex_127b4fc": 8868834,
+    "hex_2f7c58": 3079756,
+    "hex_2f85bc": 3082160,
+    "hex_2f977c": 3086700,
+    "hex_4440000": 62824448,
+    "hex_47660": 293036,
+    "hex_535038": 5448180,
+    "hex_7544a4": 7856396,
+    "hex_759440": 8024516,
+    "hex_75a0e0": 8027892,
+    "hex_75c964": null,
+    "hex_75fa28": 3271436,
+    "hex_762288": 3282336,
+    "hex_77315c": 6413936,
+    "hex_7735b8": 6415052,
+    "hex_7f7938": 7024732,
+    "hex_7f8188": 7026860,
+    "hex_7f90a0": 7030724,
+    "hex_7f9bb0": 7033556,
+    "hex_81a3cc": 7875768,
+    "hex_81aa44": 7877400,
+    "hex_81b2f4": 7879624,
+    "hex_81b570": 7880260,
+    "hex_81bd7c": 7882320,
+    "hex_81c240": 7883540,
+    "hex_81c8c0": 7885204,
+    "hex_81d950": 7889444,
+    "hex_81e510": 7892452,
+    "hex_824f9c": 7919436,
+    "hex_826848": 7925952,
+    "hex_828640": 7933640,
+    "hex_828c68": 7935216,
+    "hex_82a938": 7942576,
+    "hex_82bac0": 7947064,
+    "hex_82d3dc": 7953724,
+    "hex_83042c": 7966212,
+    "hex_8645d4": 8330232,
+    "hex_864808": 8330796,
+    "hex_86600c": 8336808,
+    "hex_86660c": 8338344,
+    "hex_867a2c": 8343584,
+    "hex_8680fc": 8345328,
+    "hex_8aae5c": 2863720,
+    "hex_8d16c0": 8636056,
+    "hex_8d1bf0": 8637333,
+    "hex_8d2ce1": 8641488,
+    "hex_8d2d1b": 8641543,
+    "hex_8d5a0d": 8652532,
+    "hex_8d738f": 8658523,
+    "hex_8e8e9c": 8700768,
+    "hex_8e92a8": 8701672,
+    "hex_8e9980": 8703204,
+    "hex_911110": 8871112,
+    "hex_911114": 8871116,
+    "hex_913a2c": 8881636,
+    "hex_913a30": 8881640,
+    "hex_a2443c": 9997568,
+    "hex_a24440": 9997572,
+    "hex_a28490": 10046856,
+    "hex_a28560": 18971552,
+    "hex_b753bc": null,
+    "hex_b7569c": null,
+    "hex_b757f8": null,
+    "hex_b7594c": null,
+    "hex_b75da4": null,
+    "hex_b75f50": null,
+    "hex_b7605c": null,
+    "hex_c6a1bf": null,
+    "hex_c6a290": null,
+    "hex_c6a362": null
+  },
+  "routing": {
+    "source_profiles": {
+      "main": {
+        "module": 1,
+        "parameter": 0,
+        "band": 0,
+        "class": "tInputModule",
+        "vmt": 7877400,
+        "callback": 7925952,
+        "definition": 8636056,
+        "slot": 84,
+        "field": "input_route"
+      },
+      "alt": {
+        "module": 1,
+        "parameter": 0,
+        "band": 1,
+        "class": "tInputModule",
+        "vmt": 7877400,
+        "callback": 7925952,
+        "definition": 8637333,
+        "slot": 88,
+        "field": "alt_input_route"
+      },
+      "key": {
+        "module": 5,
+        "parameter": 22,
+        "band": 0,
+        "owner_band": 1,
+        "class": "tGateModule",
+        "vmt": 7885204,
+        "callback": 7953724,
+        "definition": 8652532,
+        "slot": 100,
+        "field": "key_route"
+      },
+      "mustard_key": {
+        "module": 30,
+        "parameter": 22,
+        "band": 0,
+        "class": "tTidalGateModule",
+        "vmt": 3271436,
+        "callback": 3282336,
+        "definition": 8652532,
+        "slot": 92,
+        "field": null
+      },
+      "insert_return": {
+        "module": 8,
+        "parameter": 0,
+        "band": 0,
+        "definition_band": 0,
+        "class": "tInsertModule",
+        "vmt": 7880260,
+        "callback": 7935216,
+        "definition": 8641543,
+        "slot": 92,
+        "field": null
+      },
+      "insert_send": {
+        "module": 8,
+        "parameter": 254,
+        "band": 0,
+        "definition_band": 0,
+        "class": "tInsertModule",
+        "vmt": 7880260,
+        "callback": 7935216,
+        "definition": 8641488,
+        "slot": 88,
+        "field": null,
+        "direction": "output"
+      }
+    },
+    "output_profile": {
+      "module": 14,
+      "parameter": 254,
+      "band": 0,
+      "class": "tOutputModule",
+      "vmt": 7875768,
+      "callback": 7919436,
+      "definition": 8658523,
+      "slot": 80,
+      "field": null,
+      "direction": "output"
+    }
+  },
+  "layouts": {
+    "controller": {
+      "size": 100,
+      "id": 4,
+      "definition": 9,
+      "identity_bytes": 13,
+      "states": 17,
+      "flags": 18,
+      "value": 24,
+      "target": 28,
+      "db": 32,
+      "next_db": 36,
+      "previous_output": 40,
+      "output": 44,
+      "auto_mode": 48,
+      "next_auto_mode": 49,
+      "display_style": 53,
+      "flash_level": 54,
+      "input_time": 59,
+      "parent": 76,
+      "audio_id": 80,
+      "restore": 88,
+      "nvr": 92,
+      "value_region_bytes": 24,
+      "current_response_seed": 67,
+      "current_response_lut": 71
+    },
+    "console_list": {
+      "size": 52,
+      "parent": 36
+    },
+    "console": {
+      "size": 108,
+      "rp_controls": 48,
+      "track_arm": 64
+    },
+    "group": {
+      "size": 164,
+      "id": 48,
+      "name": 49,
+      "recall_scope": 89,
+      "update_scope": 121
+    },
+    "module": {
+      "size": 84,
+      "id": 48,
+      "definition": 53,
+      "changed_since_snapshot": 57,
+      "child_preset_active": 58,
+      "input_gain": 59,
+      "gang_control": 68,
+      "n_signals": 74,
+      "process_output_vmt_slot": 64
+    },
+    "channel": {
+      "size": 488,
+      "id": 48,
+      "type": 49,
+      "logical": 50,
+      "name": 52,
+      "stereo_mode": 85,
+      "buss_id": 98,
+      "engine_channel": 128,
+      "tidal_channel": 130,
+      "socket_group_index": 175,
+      "input_route": 179,
+      "alt_input_route": 183,
+      "key_route": 187,
+      "buss_routes": 191,
+      "output_sockets": 242,
+      "fader_module": 431,
+      "module_references": 431,
+      "control_references": 443,
+      "data_record": 48,
+      "data_record_bytes": 374,
+      "group_aux_send_enabled": 168
+    },
+    "input_socket": {
+      "size": 156,
+      "copy_to_route": 120,
+      "listen_to_copy": 124
+    },
+    "output_socket": {
+      "size": 136,
+      "source_control": 84,
+      "active": 131
+    },
+    "definition": {
+      "size": 55,
+      "data_type": 0,
+      "default": 1,
+      "band": 5,
+      "parameter": 6,
+      "name": 7,
+      "units": 39,
+      "seed": 46,
+      "lut": 50,
+      "auto_flags": 42,
+      "snapshot_type": 43,
+      "gang_flag": 44,
+      "macro_flag": 45,
+      "colour": null,
+      "data_flags": 54,
+      "name_maximum": 31,
+      "units_maximum": 2
+    },
+    "list": {
+      "size": 16,
+      "items": 4,
+      "count": 8,
+      "capacity": 12
+    },
+    "meter_manager": {
+      "size": 49236,
+      "index": 49226,
+      "minimum": 49222,
+      "synthetic_cycle": 49217,
+      "configuration": 40,
+      "configuration_bytes": 13
+    },
+    "response_seed": {
+      "size": 38,
+      "curve_type": 0,
+      "unit_descriptor": 1,
+      "unit_descriptor_bytes": 31,
+      "point_count": 32,
+      "points": 34,
+      "point_size": 8,
+      "point_position": 0,
+      "point_value": 4,
+      "lut_bytes": 1024
+    },
+    "snapshot": {
+      "size": 2004,
+      "name": 40,
+      "name_capacity": 31,
+      "flags": 1072,
+      "recall_at": 1903,
+      "recall_at_active_mask": 128
+    },
+    "network_peer": {
+      "size": 565,
+      "connected": 297,
+      "socket": 267,
+      "address": 0,
+      "master": 298,
+      "broadcast": 299,
+      "active_transfer": 291
+    },
+    "save_worker": {
+      "size": 320,
+      "finished": 17,
+      "terminated": 14,
+      "fatal": 40,
+      "path": 48,
+      "error": 305,
+      "copy_error": 306
+    }
+  },
+  "implementation": "quantum-layout-v2",
+  "release_label": "V2242",
+  "validation": {
+    "stage": "offline_runtime_verified",
+    "offline_runtime_verified": true,
+    "physical_console_verified": false,
+    "coverage": "Exact executable, isolated offline editor, loopback TCP and read-only memory verification. Selected default-context control writes were read back and restored; this is not all values, modes, channels or hardware audio."
+  },
+  "features": {
+    "inventory": true,
+    "control_write": true,
+    "routes": false,
+    "meters": true,
+    "presets": false,
+    "structure": true,
+    "transfer": false,
+    "snapshots": true,
+    "template": true,
+    "session_files": true,
+    "inspect": true,
+    "status": false
+  },
+  "control_write_allowlist": [
+    {
+      "id_prefix_hex": "010100",
+      "raw_type": 1,
+      "definition_rva": 8636948,
+      "module_vmt_rva": 7877400,
+      "process_output_rva": 7925952
+    },
+    {
+      "id_prefix_hex": "010101",
+      "raw_type": 1,
+      "definition_rva": 8637003,
+      "module_vmt_rva": 7877400,
+      "process_output_rva": 7925952
+    },
+    {
+      "id_prefix_hex": "010200",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010201",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010202",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010203",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010204",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010205",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010206",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010207",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010208",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "010209",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "01020a",
+      "raw_type": 1,
+      "definition_rva": 8653883,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020200",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020201",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020202",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020203",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020204",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020205",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020206",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020207",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020208",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020209",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "02020a",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "02020b",
+      "raw_type": 0,
+      "definition_rva": 8653938,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "020400",
+      "raw_type": 0,
+      "definition_rva": 8642378,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "030200",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030201",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030202",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030203",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030204",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030205",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030206",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030207",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030208",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "030209",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "03020a",
+      "raw_type": 1,
+      "definition_rva": 8654048,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040200",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040201",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040202",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040203",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040204",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040205",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040206",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040207",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040208",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "040209",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "04020a",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "04020b",
+      "raw_type": 0,
+      "definition_rva": 8654103,
+      "module_vmt_rva": 7887016,
+      "process_output_rva": 7959600
+    },
+    {
+      "id_prefix_hex": "050400",
+      "raw_type": 1,
+      "definition_rva": 8642598,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "050401",
+      "raw_type": 1,
+      "definition_rva": 8642983,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "050402",
+      "raw_type": 1,
+      "definition_rva": 8643368,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "050403",
+      "raw_type": 1,
+      "definition_rva": 8643753,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "050700",
+      "raw_type": 1,
+      "definition_rva": 8642150,
+      "module_vmt_rva": 7881792,
+      "process_output_rva": 7940920
+    },
+    {
+      "id_prefix_hex": "070400",
+      "raw_type": 1,
+      "definition_rva": 8642763,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "070401",
+      "raw_type": 1,
+      "definition_rva": 8643148,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "070402",
+      "raw_type": 1,
+      "definition_rva": 8643533,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "070403",
+      "raw_type": 1,
+      "definition_rva": 8643918,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576
+    },
+    {
+      "id_prefix_hex": "210c00",
+      "raw_type": 1,
+      "definition_rva": 8655595,
+      "module_vmt_rva": 7892452,
+      "process_output_rva": 7974396
+    },
+    {
+      "id_prefix_hex": "220c00",
+      "raw_type": 0,
+      "definition_rva": 8655650,
+      "module_vmt_rva": 7892452,
+      "process_output_rva": 7974396
+    },
+    {
+      "id_prefix_hex": "ff0100",
+      "raw_type": 4,
+      "definition_rva": 8636111,
+      "module_vmt_rva": 7877400,
+      "process_output_rva": 7925952
+    }
+  ],
+  "control_enums": {
+    "514": [
+      0,
+      1
+    ],
+    "516": [
+      0,
+      1
+    ],
+    "1026": [
+      0,
+      1
+    ],
+    "3106": [
+      0,
+      1
+    ]
+  },
+  "unit_contracts": {
+    "0507": {
+      "native_unit": "Hz",
+      "raw_type": 1,
+      "module_vmt_rva": 7881792,
+      "process_output_rva": 7940920,
+      "curve_type": 6,
+      "unit_descriptor_raw_hex": "1500000000006b487a00487a00000000000000000000000000000000000000",
+      "minimum": 25,
+      "maximum": 25000,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    },
+    "0504": {
+      "native_unit": "Hz",
+      "raw_type": 1,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576,
+      "curve_type": 6,
+      "unit_descriptor_raw_hex": "1500000000006b487a00487a00000000000000000000000000000000000000",
+      "minimum": 20,
+      "maximum": 20000,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    },
+    "0704": {
+      "native_unit": "dB",
+      "raw_type": 1,
+      "module_vmt_rva": 7882320,
+      "process_output_rva": 7942576,
+      "curve_type": 1,
+      "unit_descriptor_raw_hex": "02644200000000000000000000000000000000000000000000000000000000",
+      "minimum": -18,
+      "maximum": 18,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    },
+    "210c": {
+      "native_unit": "dB",
+      "raw_type": 1,
+      "module_vmt_rva": 7892452,
+      "process_output_rva": 7974396,
+      "curve_type": 1,
+      "unit_descriptor_raw_hex": "02644200000000000000000000000000000000000000000000000000000000",
+      "minimum": -150,
+      "maximum": 10,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    }
+  },
+  "authoring_aliases": [
+    "fader"
+  ],
+  "semantic_profiles": {},
+  "semantic_limits": {},
+  "contexts": {
+    "compressor": null,
+    "gate": null,
+    "eq_q": null,
+    "delay": null
+  },
+  "presets": {},
+  "session_file": {
+    "header_hex": "44694769436f2020202020534451202e53455320764f2020200d",
+    "template_filename": "quantum7-v2242-empty.ses",
+    "manifest_filename": "quantum7-v2242-empty-template.json",
+    "model_label": "Quantum7",
+    "file_version": "22.0.0.2242"
+  },
+  "feature_validation": {
+    "inventory": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Selected destination-channel and physical I/O inventory; copied 55/59-byte definitions and controller response-pointer witnesses."
+    },
+    "control_write": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "34 numeric and 26 restricted 0/1 controller families plus channel-name write/restore. Exact definition, owner and callback allowlist; default context only. Current response overrides remain rejected.",
+      "verified_numeric_rules": 34,
+      "verified_boolean_rules": 26,
+      "verified_name_rules": 1,
+      "boolean_subset": [
+        0,
+        1
+      ]
+    },
+    "routes": {
+      "stage": "unsupported",
+      "offline_runtime_verified": false,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Not admitted for this exact build."
+    },
+    "meters": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Selected bounded read-only meter request and decoding; offline synthetic levels, no physical audio validation."
+    },
+    "presets": {
+      "stage": "unsupported",
+      "offline_runtime_verified": false,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Not admitted for this exact build."
+    },
+    "structure": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Read-only current Session structure; structural edits are unsupported."
+    },
+    "transfer": {
+      "stage": "unsupported",
+      "offline_runtime_verified": false,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Not admitted for this exact build."
+    },
+    "snapshots": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Synthetic native Snapshot create, name and 25fps RecallAt authoring, reload fingerprint restoration, and deletion."
+    },
+    "template": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Zero-Snapshot template load and SaveAs with source preservation; no factory reset or binary template is distributed."
+    },
+    "session_files": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Native SaveAs, Save and same-path sentinel reload with source preservation."
+    },
+    "inspect": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Read-only loaded path, Snapshot state and 25fps observation."
+    },
+    "status": {
+      "stage": "unsupported",
+      "offline_runtime_verified": false,
+      "executable_sha256": "eddacc9927e6a5853db017d08d88f6853b11bb1afd0e6ecf74b7fb62a3161934",
+      "coverage": "Not admitted for this exact build."
+    }
+  }
+}

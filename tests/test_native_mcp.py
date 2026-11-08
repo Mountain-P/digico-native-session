@@ -15,6 +15,7 @@ from unittest.mock import Mock
 
 ROOT=Path(__file__).resolve().parents[1]
 SCRIPT=ROOT/'skills/digico-native-session/scripts/mcp_server.py'
+sys.path.insert(0,str(SCRIPT.parent))
 spec=importlib.util.spec_from_file_location('native_mcp',SCRIPT)
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
@@ -102,7 +103,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertIsNone(self.server.handle({'jsonrpc':'2.0','method':'notifications/initialized'}))
         result=self.server.handle({'jsonrpc':'2.0','id':2,'method':'tools/list'})['result']
         self.assertNotIn('resultType',result)
-        self.assertEqual(len(result['tools']),10)
+        self.assertEqual(len(result['tools']),14)
 
     def test_legacy_ping_is_allowed_before_initialization(self):
         response=self.server.handle({'jsonrpc':'2.0','id':1,'method':'ping'})

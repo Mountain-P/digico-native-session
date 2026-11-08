@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import a user-owned Q1 V2126 template locally; never contact an editor.
+"""Import a user-owned template for an admitted build; never contact an editor.
 
 Header and hash checks do not prove that a session has zero snapshots.
 new_session must still native-load this file and read back count zero and 25fps.
@@ -11,25 +11,29 @@ from pathlib import Path
 import shutil
 import sys
 
-HEADER = b'DiGiCo     Q1  .SES vN   \r'
-EXECUTABLE_SHA256 = '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
+from build_profiles import build_value, profile_bound
+
+HEADER = bytes.fromhex(build_value('session_file.header_hex'))
+EXECUTABLE_SHA256 = build_value('executable.sha256')
 
 
+@profile_bound(feature='template', error_type=ValueError)
 def configure(source, skill_root):
     source = Path(source).resolve(strict=True)
     if not source.is_file() or source.suffix.lower() != '.ses':
         raise ValueError('source must be a regular .ses file')
     with source.open('rb') as stream:
         header = stream.read(36)
-    if len(header) != 36 or header[:26] != HEADER or int.from_bytes(header[34:36], 'little') != 2126:
-        raise ValueError('source header is not Quantum1 Q1 V2126')
+    if (len(header) != 36 or header[:26] != bytes.fromhex(build_value('session_file.header_hex'))
+            or int.from_bytes(header[34:36], 'little') != build_value('release')):
+        raise ValueError('source model/version header differs from the selected build profile')
     root = Path(skill_root).resolve(strict=True)
     if not (root / 'SKILL.md').is_file():
         raise ValueError('skill-root must contain SKILL.md')
     assets = root / 'assets'
     assets.mkdir(exist_ok=True)
-    target = assets / 'quantum1-v2126-empty.ses'
-    manifest_path = assets / 'empty-template.json'
+    target = assets / build_value('session_file.template_filename')
+    manifest_path = assets / build_value('session_file.manifest_filename')
     if target.exists() or manifest_path.exists():
         raise FileExistsError('template already configured; existing files were not replaced')
     # Create exclusively, then publish the manifest after a full copy.
@@ -38,12 +42,13 @@ def configure(source, skill_root):
         shutil.copyfileobj(src, dst)
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
     manifest = {
-        'schema_version': 1, 'filename': target.name,
+        'schema_version': 1, 'build_profile': build_value('id'), 'filename': target.name,
         'sha256': digest, 'bytes': target.stat().st_size,
         'snapshot_count': 0, 'snapshot_count_verified': False,
         'validation': 'Header/hash only. Native new_session must read back zero snapshots and 25fps.',
-        'model': 'Quantum1 / Q1', 'file_version': '21.0.0.2126',
-        'executable_sha256': EXECUTABLE_SHA256,
+        'model': build_value('session_file.model_label'),
+        'file_version': build_value('session_file.file_version'),
+        'executable_sha256': build_value('executable.sha256'),
     }
     with manifest_path.open('x', encoding='utf-8') as stream:
         json.dump(manifest, stream, ensure_ascii=False, indent=2)
@@ -55,9 +60,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', required=True, type=Path)
     parser.add_argument('--skill-root', type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument('--build-profile', default=None, help='Exact verified build profile ID')
     args = parser.parse_args()
     try:
-        manifest = configure(args.source, args.skill_root)
+        manifest = configure(args.source, args.skill_root, build_profile=args.build_profile)
     except (OSError, ValueError) as error:
         print(json.dumps({'error': str(error), 'network_used': False}), file=sys.stderr)
         return 2

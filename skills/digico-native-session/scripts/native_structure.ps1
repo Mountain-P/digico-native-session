@@ -7,7 +7,8 @@ function ConvertTo-NativeStructureHex([byte[]]$Bytes) {
 function Read-NativeSessionStructure {
     [CmdletBinding()]
     param()
-    $aliasRva=0x8E9980;$recordRva=0x127A17C;$recordBytes=123
+    Assert-NativeBuildFeature 'structure'
+    $aliasRva=$script:NativeBuildProfile.addresses.hex_8e9980;$recordRva=$script:NativeBuildProfile.addresses.hex_127a17c;$recordBytes=123
     $expected=[long]$base+$recordRva
     $alias=[long]$reader.U32(([long]$base+$aliasRva))
     if($alias-ne $expected){throw 'Native Session structure alias does not point to the exact V2126 record.'}
@@ -35,8 +36,9 @@ function Read-NativeSessionStructure {
         [pscustomobject]@{name='graphic_eqs';offset=0x73;bytes=1;native_type='Byte'}
     )
     return [pscustomobject][ordered]@{
-        schema_version=1;subsystem='native-session-structure-readonly';profile='quantum1-v2126'
-        executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
+        schema_version=1;subsystem='native-session-structure-readonly';profile=$script:NativeBuildProfile.id
+        build_profile=$script:NativeBuildProfile.id
+        executable_sha256=$script:NativeBuildProfile.executable.sha256
         executable_hash_verified_by_caller=$true;alias_slot_rva=$aliasRva;record_rva=$recordRva
         record_pointer=$alias;record_bytes=$recordBytes;raw_hex=$raw
         alias_verified=$true;consistent_double_read=$true;values_atomic=$false
@@ -44,8 +46,8 @@ function Read-NativeSessionStructure {
         offset_layout=$layout
         layout_provenance=[pscustomobject]@{
             kind='static Delphi extended RTTI plus native constructor reads'
-            record_type='tConsoleRec';record_typeinfo_rva=0x8AAE5C
-            count_slot_constructor_va=@('0xC6A1BF','0xC6A290','0xC6A362')
+            record_type='tConsoleRec';record_typeinfo_rva=$script:NativeBuildProfile.addresses.hex_8aae5c
+            count_slot_constructor_va=@(('0x{0:X}' -f $script:NativeBuildProfile.addresses.hex_c6a1bf),('0x{0:X}' -f $script:NativeBuildProfile.addresses.hex_c6a290),('0x{0:X}' -f $script:NativeBuildProfile.addresses.hex_c6a362))
             count_slots='native indices1..8; human mode labels and DSP weighting unresolved'
             unknown_bytes='retained in raw_hex; no labels inferred for other offsets'
         }
