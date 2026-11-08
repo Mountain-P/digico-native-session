@@ -59,6 +59,12 @@ Post-disconnect checks preserved the source-file hash, selected numeric current/
 
 No new raw-host or send API is provided by this research module.
 
+The [read-only baseline oracle](mirror-oracle.md) supplies recovered hashes,
+converted signature bytes and copied source witnesses through a caller-bound
+reader. It constructs no protocol body/frame and sends nothing. Its evidence
+distinguishes the bounded V2126 offline observation from V2242.4's static-only
+five-term compatibility algorithms.
+
 ## What accepted1 actually establishes
 
 Observed V2126 receiver `0xBF1924` compares these predicates before sending the
