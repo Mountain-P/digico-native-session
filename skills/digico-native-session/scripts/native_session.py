@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Plan verified DiGiCo native operations; explicit execution uses the bundled Windows runner.
+"""Read/write reviewed .ses files or plan verified DiGiCo native operations.
 
-Planning and execute without --send never contact a VM, editor, or network.
-The runner supports the exact Quantum1 V2126 profile; no UI automation, editor
-installation, VM boot, firewall changes, or arbitrary remote host is exposed.
+File commands and planning never contact a VM, editor, or network. Explicit
+editor execution uses the bundled Windows runner and exact build profiles;
+no UI automation, installation, VM boot, or arbitrary remote host is exposed.
 """
 from __future__ import annotations
 
@@ -562,8 +562,19 @@ def invoke_windows(plan, *, vm, executable, result_path, process_id=None):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    file_commands = {'file-inspect': 'inspect', 'file-clone': 'clone', 'file-edit': 'edit'}
+    if argv and argv[0] in file_commands:
+        from ses_file import main as file_main
+        return file_main([file_commands[argv[0]], *argv[1:]])
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
+    for name, help_text in (
+        ('file-inspect', 'read a .ses file directly without an editor, VM or network'),
+        ('file-clone', 'write a byte-exact .ses copy to a new file without an editor'),
+        ('file-edit', 'edit supported .ses records directly; see file-edit --help'),
+    ):
+        commands.add_parser(name, help=help_text)
     recover_parser = commands.add_parser('recover', help='inspect flushed operation receipts; does not call or replay a target')
     recover_parser.add_argument('--journal', type=Path, required=True)
     recover_parser.add_argument('--compiled-request', type=Path)
