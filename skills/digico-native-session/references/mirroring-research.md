@@ -1,8 +1,9 @@
 # Native Mirror initial-sync research
 
-This document separates shipped-code observations from experiment design. No VM,
-editor, console, network transmission, or user Session was used for this work.
+This document separates shipped-code observations, bounded private-lab evidence,
+and experiment design.
 `mirror_state.py` is a passive decoder/evidence ledger, not a full mirror peer.
+The [read-only Mirror oracle](mirror-oracle.md) supplies independently copied compatibility facts; it never builds or sends a Verify packet.
 
 ## Evidence and build boundary
 
@@ -27,6 +28,11 @@ The manufacturer describes session synchronization before mirroring, explicit
 Mirror To/From directions, and Remote/One Way/Full Mirror/Expander operating
 modes. These are product semantics, not recovered numeric wire-mode labels.
 See the [manufacturer Software Reference, Network and Mirroring](https://support.digico.biz/hc/en-gb/article_attachments/37137993915665).
+
+## Bounded V2126 lab observation
+
+An isolated Quantum1 V2126 probe sent exactly one independently verified direction0 SessionVerify and observed the native accepted reply with 372,543 received bytes, 514 scalar control messages, 30 state batches and 30,199 observed control IDs; no unsupported flag records were found, while three other messages remained opaque.
+Post-disconnect checks preserved the source-file hash, selected numeric current/target/output bytes and Session path/FPS/console identity, but no end marker was established: `initial_sync_complete=false` and `end_marker_verified=false`, and this private probe does not expose a CLI/MCP or live-Mirror feature.
 
 ## Observed normal connection sequence
 
@@ -205,7 +211,7 @@ The passive semantic module currently rejects the new profile rather than
 pretending those unresolved compatibility inputs are supported. These observed
 wire similarities are useful research evidence for a separate profile.
 
-## Minimal bounded isolated-lab probe (design; not executed)
+## Conservative bounded isolated-lab probe design
 
 1. Use only an isolated copy of the exact V2126 editor with a newly prepared
    synthetic test Session. Preserve the original user Session and process.

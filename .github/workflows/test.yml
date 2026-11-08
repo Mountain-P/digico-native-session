@@ -46,3 +46,4 @@ jobs:
           & ./tests/native_session_file_identity_tests.ps1 -RunnerPath "$scripts/windows_native.ps1" -OldProfilePath "$skillRoot/assets/build-profiles/quantum1-v2126.json"
           & ./tests/native_inventory_definition_tests.ps1 -SkillRoot "$skillRoot" -ProfileModulePath "$scripts/native_profile.ps1" -InventoryModulePath "$scripts/native_inventory.ps1"
           & ./tests/native_lease_tests.ps1 -LeaseModulePath "$scripts/native_lease.ps1"
+          & ./tests/native_mirror_oracle_tests.ps1 -OracleModulePath "$scripts/native_mirror_oracle.ps1"

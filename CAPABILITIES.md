@@ -16,7 +16,7 @@
 
 新版六款均已通過未修改公開 Windows runner 的 typed request 回歸，含範本新檔、Snapshot 編輯／未存標記重載，以及代表性 fader／trim／EQ gain／LPF／mute／Input name 保存重載後的獨立回讀。範圍是各 exact EXE 的離線 runner，不等同六款皆有獨立 CLI／MCP 傳輸實測。未將舊 Q1 的 routing、Preset 或 transfer 成功推定到新版。`catalog` 為本機 inventory 轉換，沒有額外目標連線；詳見 [驗證](skills/digico-native-session/references/validation.md)。
 
-SD 範圍只包含 Quantum5 的升級 SD5，以及 Quantum7 的 `SD7Q.exe`；一般 SD5、SD7 不在此矩陣。Quantum638 未找到可核對的現行官方 offline download，仍未解決；Quantum8 的測試不能替代它。矩陣外的 EXE、其他 FPS、實體控台與遠端主機均未驗證。
+SD 範圍依要求只納入升級後的 Quantum5。Quantum7 屬於 Quantum 系列，官方執行檔名為 `SD7Q.exe`；一般 SD5、SD7 不在此矩陣。Quantum638 未找到可核對的現行官方 offline download，仍未解決；Quantum8 的測試不能替代它。矩陣外的 EXE、其他 FPS、實體控台與遠端主機均未驗證。
 
 ## 證據代表什麼
 
@@ -52,6 +52,8 @@ SD 範圍只包含 Quantum5 的升級 SD5，以及 Quantum7 的 `SD7Q.exe`；一
 ## Mirror 與尚未驗證的工作
 
 公開 `mirror_state.py` 是有界被動 decoder／state ledger；SessionVerify 的相容性檢查另有獨立研究。成功的 Verify reply 不等於已套用全部 live state。尚無已證實的完整初始同步終點，`initial_sync_complete=false`、`end_marker_verified=false`；CLI／MCP 不提供 full-Mirror 寫入、raw-packet 傳送或任意 socket API。新版 Verify 欄位與 checksum 差異不能沿用舊 Q1 的語意判定。
+
+舊 Q1 V2126 的私有有界 direction0 實驗已觀察到原廠 accepted 回覆與控制 state feed，並通過來源檔、選定數值、Session context 及 peer cleanup 檢查；這不構成 CLI／MCP 或完整 live-Mirror 功能，初始同步完成旗標仍為 false。
 
 實體控台／rack、音訊效果、任意 Session structure setter、完整 `.ses` parser、未核准 packed domain、palette、完整硬體 patch 與矩陣外 build 仍不列為已驗能力。詳細契約見 [build profiles](skills/digico-native-session/references/build-profiles.md)、[authoring](skills/digico-native-session/references/authoring.md) 與 [Mirror 研究](skills/digico-native-session/references/mirroring-research.md)。
 
