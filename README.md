@@ -11,6 +11,8 @@
 ```sh
 python3 skills/digico-native-session/scripts/native_session.py file-inspect \
   --source /absolute/work/source.ses --encoding cp950 --channel-id 0x0100
+python3 skills/digico-native-session/scripts/native_session.py file-inspect \
+  --source /absolute/work/source.ses --snapshot-index 0 --channel-id 0x0100
 python3 skills/digico-native-session/scripts/native_session.py file-edit \
   --source /absolute/work/source.ses --request /absolute/work/edit.json \
   --output /absolute/work/edited.ses --encoding cp950

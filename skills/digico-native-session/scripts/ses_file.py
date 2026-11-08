@@ -255,7 +255,8 @@ class SesFile:
                          *(offsets + [0] * (INDEX_SLOTS - len(offsets))))
         return bytes(header) + b''.join(self.sections)
 
-    def inspect(self, encoding='ascii', channel_id=None, include_raw_controls=False):
+    def inspect(self, encoding='ascii', channel_id=None, include_raw_controls=False,
+                snapshot_index=None):
         if encoding not in ENCODINGS:
             raise SesFormatError('Unsupported text encoding')
         data = self.to_bytes()
@@ -291,6 +292,19 @@ class SesFile:
             report['current_console'] = console.inspect(
                 encoding, channel_id, include_raw_controls=include_raw_controls)
             report['semantic_coverage'] = 'header-container-snapshots-current-basic-mix'
+        if snapshot_index is not None:
+            from ses_console import CurrentConsole
+            snapshot_state = self._snapshots()
+            index = _integer(snapshot_index, 'Snapshot index', 0, len(snapshot_state.snapshots)-1)
+            snapshot = snapshot_state.snapshots[index]
+            stored = CurrentConsole(snapshot, self.release, self.build_profile,
+                                    module_pool=snapshot_state.modules)
+            report['selected_snapshot'] = {
+                'index': index, 'metadata': snapshot.inspect(encoding, include_channels=False),
+                'stored_mix': stored.inspect(encoding, channel_id,
+                                            include_raw_controls=include_raw_controls),
+                'effective_recall_verified': False,
+            }
         return report
 
     def edit(self, request):
@@ -409,6 +423,8 @@ def main(argv=None):
                          help='filter current-mix inspection to one raw uint16 channel ID')
         sub.add_argument('--include-raw-controls', action='store_true',
                          help='also list bounded raw controller records without guessing datatypes')
+        sub.add_argument('--snapshot-index', type=int,
+                         help='also inspect one Snapshot stored mix, resolving shared pool records')
         if command != 'inspect':
             sub.add_argument('--output', type=Path, required=True)
         if command == 'edit':
@@ -431,7 +447,8 @@ def main(argv=None):
                 raise SesFormatError('Request exceeds the local JSON byte bound')
             session = session.edit(json.loads(raw_request.decode('utf-8-sig'),
                                               object_pairs_hook=_json_object))
-        report = session.inspect(args.encoding, args.channel_id, args.include_raw_controls)
+        report = session.inspect(args.encoding, args.channel_id, args.include_raw_controls,
+                                 args.snapshot_index)
         if args.command != 'inspect':
             session.write(args.output)
         print(json.dumps(report, ensure_ascii=False,

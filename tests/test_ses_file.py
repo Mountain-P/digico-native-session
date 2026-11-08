@@ -390,6 +390,28 @@ class SesFileIoAndCliTests(SesFileFixture):
 
 
 class SesEditContractTests(unittest.TestCase):
+    def test_selected_snapshot_reads_captured_mix_after_current_mix_changes(self):
+        raw = snapshot_container('quantum5-v2242', current_capture((input_channel_capture(),)))
+        session = ses.SesFile.from_bytes(raw)
+        result = session.edit(edit_request(raw,
+            {'op': 'set_channel_name', 'channel_id': 256, 'name': 'Captured Input'},
+            {'op': 'set_control', 'id': '210c000001', 'value': -18},
+            {'op': 'create', 'index': 'append', 'name': 'Stored Mix'},
+            {'op': 'set_control', 'id': '210c000001', 'value': -9}))
+        report = result.inspect(channel_id=256, snapshot_index=0)
+        current = report['current_console']['channels'][0]
+        captured = report['selected_snapshot']['stored_mix']['channels'][0]
+        self.assertEqual(captured['name'], 'Captured Input')
+        self.assertEqual(next(c['value'] for c in captured['basic_controls']
+                              if c['parameter'] == 'fader'), -18)
+        self.assertEqual(next(c['value'] for c in current['basic_controls']
+                              if c['parameter'] == 'fader'), -9)
+        self.assertFalse(report['selected_snapshot']['effective_recall_verified'])
+        self.assertEqual(session.to_bytes(), raw)
+        for index in (-1, 1, True):
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                result.inspect(snapshot_index=index)
+
     def test_empty_edit_and_hash_rejection_happen_without_snapshot_parsing(self):
         raw = container(); session = ses.SesFile.from_bytes(raw)
         self.assertEqual(session.edit(edit_request(raw)).to_bytes(), raw)

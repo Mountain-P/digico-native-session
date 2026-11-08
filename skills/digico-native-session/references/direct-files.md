@@ -28,6 +28,8 @@ python3 "$SKILL/scripts/native_session.py" file-clone \
 
 `--include-raw-controls` 可另列所選通道的原始 controller ID／flags／value bytes，不推測未知資料型別或單位；輸出有本機筆數上限，資料較多時使用 `--channel-id`。
 
+加入 `--snapshot-index N` 可查看該 Snapshot 保存的混音，並解析共用 module pool；例如 `file-inspect --source /absolute/work/synthetic-edited.ses --snapshot-index 1 --channel-id 0x0100`。`selected_snapshot.stored_mix` 是保存的 controller records，可用來核對先改 current mix 再 create 的結果；它沒有執行 recall，不能證明所有 scope／繼承／保護條件下的有效召回結果。
+
 `clone` 寫入逐 byte 相同的新 `.ses`；`file-inspect` 與 `file-clone` 也可換成 standalone 的 `inspect`／`clone`，參數相同。`--build-profile ID` 可要求特定相符檔案格式，不會替換 header 或跨版本轉檔。
 
 ## 編輯 request

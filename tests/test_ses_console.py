@@ -92,6 +92,57 @@ class CurrentConsoleTests(unittest.TestCase):
             with self.assertRaises(ConsoleFormatError):
                 c.inspect(include_raw_controls=True)
 
+    def test_snapshot_pool_view_resolves_stored_basic_and_raw_records_without_mutation(self):
+        owned = CurrentConsole.from_bytes(fixture(flags=1, parent=0))
+        shared = CurrentConsole.from_bytes(fixture(own=False)).snapshot
+        shared.channels[0].modules = [0, -1, 1]
+        pool = owned.snapshot.channels[0].modules
+        source_before = shared.to_bytes()
+        pool_before = [item.to_bytes() for item in pool]
+        view = CurrentConsole(shared, 2242, 'quantum5-v2242', module_pool=pool)
+        result = view.inspect(channel_id=0x100, include_raw_controls=True)
+        channel = result['channels'][0]
+        self.assertFalse(channel['own_modules'])
+        self.assertTrue(channel['shared_module_references_resolved'])
+        self.assertEqual(channel['module_pool_indices'], [0, -1, 1])
+        self.assertEqual({row['parameter']: row['value'] for row in channel['basic_controls']},
+                         {'fader': -12.25, 'mute': 0.0, 'trim': 1.5})
+        self.assertTrue(all(not row['file_write_supported'] for row in channel['basic_controls']))
+        self.assertEqual(len(channel['raw_controls']), 4)
+        unknown = next(row for row in channel['raw_controls'] if row['id'] == 'aa0c050001')
+        self.assertEqual(unknown['value_raw_hex'], struct.pack('<f', 123.5).hex())
+        self.assertNotIn('value', unknown)
+        self.assertFalse(result['scope_inheritance_applied'])
+        self.assertFalse(result['effective_recall_verified'])
+        self.assertEqual(view.to_bytes(), source_before)
+        self.assertEqual([item.to_bytes() for item in pool], pool_before)
+
+    def test_snapshot_pool_view_is_readonly_and_bad_references_fail_closed(self):
+        owned = CurrentConsole.from_bytes(fixture())
+        pool = owned.snapshot.channels[0].modules
+        view = CurrentConsole.from_bytes(fixture(own=False), module_pool=pool)
+        before = view.to_bytes()
+        pool_before = [item.to_bytes() for item in pool]
+        with self.assertRaises(ConsoleFormatError):
+            view.set_basic_control('210c000001', -10)
+        with self.assertRaises(ConsoleFormatError):
+            view.rename_channel(0x100, b'Changed')
+        self.assertEqual(view.to_bytes(), before)
+        self.assertEqual([item.to_bytes() for item in pool], pool_before)
+        for index in (-2, len(pool), True):
+            view.snapshot.channels[0].modules = [index]
+            with self.assertRaises(ConsoleFormatError):
+                view.inspect(include_raw_controls=True)
+        readonly_owned = CurrentConsole(owned.snapshot, 2242, module_pool=[])
+        with self.assertRaises(ConsoleFormatError):
+            readonly_owned.set_basic_control('210c000001', -10)
+        from unittest.mock import patch
+        import ses_console
+        view = CurrentConsole.from_bytes(fixture(own=False), module_pool=pool)
+        with patch.object(ses_console, 'MAX_RAW_CONTROL_ROWS', 3):
+            with self.assertRaises(ConsoleFormatError):
+                view.inspect(include_raw_controls=True)
+
     def test_profile_trim_bounds_and_unbound_intersection(self):
         for profile in (None, 'quantum2-v2242-4', 'quantum3-v2242', 'quantum5-v2242', 'quantum7-v2242'):
             c = CurrentConsole.from_bytes(fixture(), build_profile=profile)

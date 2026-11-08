@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Plan verified DiGiCo native operations; explicit execution uses the bundled Windows runner.
+"""Read/write reviewed .ses files or plan verified DiGiCo native operations.
 
-Planning and execute without --send never contact a VM, editor, or network.
-The runner supports the exact Quantum1 V2126 profile; no UI automation, editor
-installation, VM boot, firewall changes, or arbitrary remote host is exposed.
+File commands and planning never contact a VM, editor, or network. Explicit
+editor execution uses the bundled Windows runner and exact build profiles;
+no UI automation, installation, VM boot, or arbitrary remote host is exposed.
 """
 from __future__ import annotations
 

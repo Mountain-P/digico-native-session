@@ -63,14 +63,20 @@ def _profile(value, version):
 
 
 class CurrentConsole:
-    def __init__(self, snapshot, version, build_profile=None):
+    def __init__(self, snapshot, version, build_profile=None, module_pool=None):
         self.snapshot = snapshot
         self.version = version
         self.profile = _profile(build_profile, version)
+        if module_pool is not None and (not isinstance(module_pool, (list, tuple))
+                or any(not isinstance(module, ModuleSnapshot) for module in module_pool)):
+            raise ConsoleFormatError('Module pool must contain parsed ModuleSnapshot objects')
+        # Pool-backed views inspect stored Snapshot records only. They neither
+        # compute scope/inheritance nor enable current-state setters.
+        self.module_pool = tuple(module_pool) if module_pool is not None else None
 
     @classmethod
-    def from_bytes(cls, data, version=2242, build_profile=None):
-        return cls(ConsoleSnapshot.from_bytes(data, version=version), version, build_profile)
+    def from_bytes(cls, data, version=2242, build_profile=None, module_pool=None):
+        return cls(ConsoleSnapshot.from_bytes(data, version=version), version, build_profile, module_pool)
 
     def to_bytes(self):
         return self.snapshot.to_bytes()
@@ -85,13 +91,22 @@ class CurrentConsole:
             raise ConsoleFormatError('Channel name length exceeds its reviewed ShortString31 field')
         return rows[0]
 
+    def _modules(self, channel):
+        if channel.own_modules.effective(1)[0]:
+            for module in channel.modules:
+                if not isinstance(module, ModuleSnapshot):
+                    raise ConsoleFormatError('Owned current-state module is not inline')
+                yield module
+        elif self.module_pool is not None:
+            for index in channel.modules:
+                if type(index) is not int or not -1 <= index < len(self.module_pool):
+                    raise ConsoleFormatError('Shared module pool index is outside its bounds')
+                if index != -1:
+                    yield self.module_pool[index]
+
     def _controls(self, channel):
-        """Yield reviewed numeric records, without inferring unknown datatypes."""
-        if not channel.own_modules.effective(1)[0]:
-            return
-        for module in channel.modules:
-            if not isinstance(module, ModuleSnapshot):
-                raise ConsoleFormatError('Owned current-state module is not inline')
+        """Yield stored numeric records, without applying scope/inheritance."""
+        for module in self._modules(channel):
             module_type = struct.unpack_from('<i', module.header.effective(58))[0]
             for offset in range(0, len(module.controls), 8):
                 record = module.controls[offset:offset+8]
@@ -119,7 +134,7 @@ class CurrentConsole:
             channels = [self._channel(channel_id)]
         if include_raw_controls:
             raw_count = sum(len(module.controls) // 8 for channel in channels
-                            if channel.own_modules.effective(1)[0] for module in channel.modules)
+                            for module in self._modules(channel))
             if raw_count > MAX_RAW_CONTROL_ROWS:
                 raise ConsoleFormatError('Raw control inspection exceeds its row bound; filter by channel_id')
         rows = []
@@ -145,7 +160,9 @@ class CurrentConsole:
                                  'value_raw_hex': record[4:8].hex(), 'finite': finite,
                                  'flags': record[3], 'native_unit': unit,
                                  'minimum': low, 'maximum': high,
-                                 'file_write_supported': (0x100 <= channel.channel_id <= 0x1ff
+                                 'file_write_supported': (self.module_pool is None
+                                     and bool(channel.own_modules.effective(1)[0])
+                                     and 0x100 <= channel.channel_id <= 0x1ff
                                      and record[3] == 0 and module.parent_module_index == -1
                                      and channel_counts[channel.channel_id] == 1
                                      and prefix_counts[prefix] == 1)})
@@ -153,30 +170,35 @@ class CurrentConsole:
                          'name_decoded': name is not None, 'name_raw_hex': namebytes.hex(),
                          'own_modules': bool(channel.own_modules.effective(1)[0]),
                          'basic_controls': controls}
+            if not channel.own_modules.effective(1)[0]:
+                summary['module_pool_indices'] = list(channel.modules)
+                summary['shared_module_references_resolved'] = self.module_pool is not None
             if include_raw_controls:
                 summary['raw_controls'] = []
-                if channel.own_modules.effective(1)[0]:
-                    for module in channel.modules:
-                        module_type = struct.unpack_from('<i', module.header.effective(58))[0]
-                        for p, m, band, flags, value in struct.iter_unpack('<BBBB4s', module.controls):
-                            summary['raw_controls'].append({
-                                'id': (bytes((p, m, band)) + struct.pack('<H', channel.channel_id)).hex(),
-                                'flags': flags, 'value_raw_hex': value.hex(),
-                                'value_type': 'opaque_native_4bytes', 'module_type': module_type,
-                                'parent_module_index': module.parent_module_index,
-                                'original_snapshot_index': module.original_snapshot_index})
-                else:
+                for module in self._modules(channel):
+                    module_type = struct.unpack_from('<i', module.header.effective(58))[0]
+                    for p, m, band, flags, value in struct.iter_unpack('<BBBB4s', module.controls):
+                        summary['raw_controls'].append({
+                            'id': (bytes((p, m, band)) + struct.pack('<H', channel.channel_id)).hex(),
+                            'flags': flags, 'value_raw_hex': value.hex(),
+                            'value_type': 'opaque_native_4bytes', 'module_type': module_type,
+                            'parent_module_index': module.parent_module_index,
+                            'original_snapshot_index': module.original_snapshot_index})
+                if not channel.own_modules.effective(1)[0] and self.module_pool is None:
                     summary['raw_controls_unavailable_reason'] = 'shared_module_references'
-                    summary['module_pool_indices'] = list(channel.modules)
             rows.append(summary)
         return {'version': self.version,
                 'file_format_profile': self.profile['id'] if self.profile is not None else None,
                 'channel_count': len(self.snapshot.channels), 'channels': rows,
+                'record_semantics': 'stored_controller_records',
+                'scope_inheritance_applied': False, 'effective_recall_verified': False,
                 'bounds_source': 'reviewed_static_definition_seed',
                 'live_definition_verified': False, 'native_load_verified': False,
                 'physical_audio_verified': False}
 
     def rename_channel(self, channel_id, namebytes):
+        if self.module_pool is not None:
+            raise ConsoleFormatError('Pool-backed Snapshot inspection is read-only')
         channel = self._channel(channel_id, input_only=True)
         if (not isinstance(namebytes, bytes) or not 1 <= len(namebytes) <= 31
                 or b'\0' in namebytes):
@@ -197,6 +219,8 @@ class CurrentConsole:
         channel = self._channel(channel_id, input_only=True)
         if not channel.own_modules.effective(1)[0]:
             raise ConsoleFormatError('Current-state control uses shared module references')
+        if self.module_pool is not None:
+            raise ConsoleFormatError('Pool-backed Snapshot inspection is read-only')
         matches = [(module, offset, record) for module, offset, key, record in self._controls(channel)
                    if key == prefix]
         if len(matches) != 1:
