@@ -26,7 +26,7 @@ function Assert-DiGiCoTransferIdle {
     if ($worker -and ($worker.terminated -eq 0 -or $worker.finished -eq 0)) {
         throw 'Native export requires no save worker, or a terminated and finished worker; no file request was sent.'
     }
-    $manager=[long]$reader.U32($base+0x126E670)
+    $manager=[long]$reader.U32($base+$script:NativeBuildProfile.addresses.hex_126e670)
     if ($manager -eq 0) { throw 'Native networking is not initialized.' }
     $count=$reader.I32($manager+8)
     $items=[long]$reader.U32($manager+4)
@@ -34,7 +34,7 @@ function Assert-DiGiCoTransferIdle {
     for ($i=0; $i -lt $count; $i++) {
         $peer=[long]$reader.U32($items+4*$i)
         if ($peer -eq 0) { throw 'Invalid native peer pointer.' }
-        if ($reader.U32($peer+0x125) -ne 0) { throw 'Another native file transfer is active; no file request was sent.' }
+        if ($reader.U32($peer+$script:NativeBuildProfile.layouts.network_peer.active_transfer) -ne 0) { throw 'Another native file transfer is active; no file request was sent.' }
     }
 }
 
@@ -130,6 +130,7 @@ function Invoke-DiGiCoNativeFileExport {
         [ValidateRange(1000,120000)][int]$TimeoutMs=30000,
         [ValidateRange(0,2147483647)][long]$ReceiveStartOffset=0
     )
+    Assert-NativeBuildFeature 'transfer'
     $stage=$null
     $output=$null
     $requestSent=$false
@@ -238,7 +239,8 @@ function Invoke-DiGiCoNativeFileExport {
         }
         if (Test-Path -LiteralPath $DestinationPath) { throw 'Native export destination appeared during transfer; refusing overwrite.' }
         [IO.File]::Move($stage,$DestinationPath)
-        $stage=$null
+        Assert-NativeBuildFeature 'transfer'
+    $stage=$null
         return [pscustomobject][ordered]@{
             schema_version=1;subsystem='native-file-export';status='ok'
             transport='native-tcp-loopback';file_type=3;command_id=0

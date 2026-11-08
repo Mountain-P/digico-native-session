@@ -203,6 +203,21 @@ class NativeOperationContractTests(unittest.TestCase):
 
 
 class NativeCliAndPublicationTests(unittest.TestCase):
+    def authenticated_mac_launcher(self, command, stage):
+        bootstrap = base64.b64decode(command[-1]).decode('utf-16le')
+        launcher = Path(stage) / 'invoke.ps1'
+        self.assertTrue(launcher.is_file())
+        content = launcher.read_text(encoding='utf-8')
+        self.assertIn(hashlib.sha256(launcher.read_bytes()).hexdigest(), bootstrap)
+        self.assertIn(native.mac_guest_path(launcher).replace("'", "''"), bootstrap)
+        self.assertIn('Runtime launcher hash mismatch', bootstrap)
+        self.assertLess(bootstrap.index('Get-FileHash'), bootstrap.index('ReadAllText'))
+        self.assertIn('[scriptblock]::Create([IO.File]::ReadAllText($p))', bootstrap)
+        self.assertNotIn('foreach($resource', bootstrap)
+        self.assertNotIn('-SkillRoot', bootstrap)
+        self.assertLess(len(command[-1]), 2000)
+        return bootstrap, content
+
     def invoke_main(self, args):
         stdout, stderr = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
@@ -224,6 +239,75 @@ class NativeCliAndPublicationTests(unittest.TestCase):
                 self.assertFalse(json.loads(stdout)['network_used'])
                 self.assertFalse((root / 'unused-result.json').exists())
                 actor.assert_not_called()
+
+    def test_execute_profile_flag_selects_quantum5_for_an_unqualified_dry_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = root / 'synthetic-request.json'
+            result_path = root / 'unused-result.json'
+            document = request({'op': 'create', 'index': 'append', 'name': 'Synthetic A'})
+            source.write_text(json.dumps(document), encoding='utf-8')
+            original = source.read_bytes()
+            with mock.patch.object(native, 'invoke_windows', side_effect=AssertionError('dry-run must not invoke Windows')) as actor, \
+                 mock.patch.object(native.subprocess, 'run', side_effect=AssertionError('dry-run must not invoke a VM')):
+                code, stdout, stderr = self.invoke_main([
+                    'execute', '--request', str(source), '--build-profile', 'quantum5-v2242',
+                    '--vm', 'Synthetic VM', '--exe', r'C:\Synthetic\Quantum5.exe',
+                    '--result', str(result_path)])
+            self.assertEqual(code, 0, stderr)
+            plan = json.loads(stdout)
+            expected = native.select_profile(build_profile='quantum5-v2242')
+            self.assertEqual(plan['build_profile'], expected['id'])
+            self.assertEqual(plan['executable_sha256'], expected['executable']['sha256'])
+            self.assertEqual(plan['steps'][0]['build_profile'], expected['id'])
+            self.assertTrue(plan['dry_run'])
+            self.assertFalse(plan['network_used'])
+            self.assertFalse(plan['windows_runner_invoked'])
+            self.assertFalse(plan['runtime_acceptance_verified'])
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(sorted(path.name for path in root.iterdir()), [source.name])
+            actor.assert_not_called()
+
+    def test_execute_profile_flag_rejects_a_different_explicit_request_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = root / 'synthetic-request.json'
+            document = request({'op': 'create', 'index': 'append', 'name': 'Synthetic A'})
+            document['build_profile'] = 'quantum1-v2126'
+            source.write_text(json.dumps(document), encoding='utf-8')
+            with mock.patch.object(native, 'invoke_windows', side_effect=AssertionError('profile mismatch must not invoke Windows')) as actor, \
+                 mock.patch.object(native.subprocess, 'run', side_effect=AssertionError('profile mismatch must not invoke a VM')):
+                for send in (False, True):
+                    with self.subTest(send=send):
+                        args = ['execute', '--request', str(source), '--build-profile', 'quantum5-v2242',
+                                '--vm', 'Synthetic VM', '--exe', r'C:\Synthetic\Quantum5.exe',
+                                '--result', str(root / 'unused-result.json')]
+                        code, stdout, stderr = self.invoke_main(args + (['--send'] if send else []))
+                        self.assertEqual(code, 2)
+                        self.assertEqual(stdout, '')
+                        self.assertIn('--build-profile differs from the request', json.loads(stderr)['error'])
+            self.assertEqual(sorted(path.name for path in root.iterdir()), [source.name])
+            actor.assert_not_called()
+
+    def test_execute_profile_flag_cannot_override_a_different_inventory_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = root / 'synthetic-request.json'
+            inventory = root / 'synthetic-inventory.json'
+            source.write_text(json.dumps(request({'op': 'create', 'index': 'append', 'name': 'Synthetic A'})), encoding='utf-8')
+            profile = native.select_profile(build_profile='quantum1-v2126')
+            inventory.write_text(json.dumps({'schema_version': 1, 'build_profile': profile['id'],
+                                             'executable_sha256': profile['executable']['sha256']}), encoding='utf-8')
+            with mock.patch.object(native, 'invoke_windows', side_effect=AssertionError('inventory mismatch must not invoke Windows')) as actor, \
+                 mock.patch.object(native.subprocess, 'run', side_effect=AssertionError('inventory mismatch must not invoke a VM')):
+                for send in (False, True):
+                    with self.subTest(send=send):
+                        args = ['execute', '--request', str(source), '--inventory', str(inventory),
+                                '--build-profile', 'quantum5-v2242', '--vm', 'Synthetic VM',
+                                '--exe', r'C:\Synthetic\Quantum5.exe', '--result', str(root / 'unused-result.json')]
+                        code, stdout, stderr = self.invoke_main(args + (['--send'] if send else []))
+                        self.assertEqual(code, 2)
+                        self.assertEqual(stdout, '')
+                        self.assertIn('Mixed build identities', json.loads(stderr)['error'])
+            self.assertEqual(sorted(path.name for path in root.iterdir()), sorted([source.name, inventory.name]))
+            actor.assert_not_called()
 
     def test_invalid_final_step_does_not_publish_partial_plan(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -279,11 +363,11 @@ class NativeCliAndPublicationTests(unittest.TestCase):
             plan = native.compile_request(request({'op': 'save'}))
 
             def fake_run(command, **kwargs):
-                wrapper = base64.b64decode(command[-1]).decode('utf-16le')
                 self.assertEqual(command[:5], ['prlctl', 'exec', 'Test VM', '--current-user', 'powershell.exe'])
+                stage = next(root.glob('digico-native-runtime-*'))
+                _, wrapper = self.authenticated_mac_launcher(command, stage)
                 self.assertIn('-SkillRoot', wrapper)
                 self.assertIn("operator''s result.json", wrapper)
-                stage = next(root.glob('digico-native-runtime-*'))
                 receipt = stage / 'runtime-resources.json'
                 self.assertIn(hashlib.sha256(receipt.read_bytes()).hexdigest(), wrapper)
                 self.assertLess(len(command[-1]), 5000)
@@ -326,16 +410,18 @@ class NativeCliAndPublicationTests(unittest.TestCase):
             output = root / 'Documents' / 'reviews' / 'result.json'
 
             def fake_run(command, **kwargs):
-                wrapper = base64.b64decode(command[-1]).decode('utf-16le')
                 stages = list(output.parent.glob('digico-native-runtime-*'))
                 self.assertEqual(len(stages), 1)
                 stage = stages[0]
+                bootstrap, wrapper = self.authenticated_mac_launcher(command, stage)
                 self.assertFalse(stage.name.startswith('.'))
                 self.assertNotIn('\\.codex\\', wrapper)
+                self.assertNotIn('\\.codex\\', bootstrap)
                 self.assertIn(native.mac_guest_path(stage), wrapper)
                 receipt_path = stage / 'runtime-resources.json'
                 receipt = json.loads(receipt_path.read_text())
                 self.assertEqual({item['path'] for item in receipt['resources']}, set(expected))
+                self.assertNotIn('invoke.ps1', {item['path'] for item in receipt['resources']})
                 for relative, original in expected.items():
                     self.assertEqual((stage / relative).read_bytes(), original)
                     resource = next(item for item in receipt['resources'] if item['path'] == relative)
@@ -390,6 +476,7 @@ class NativeCliAndPublicationTests(unittest.TestCase):
             self.assertEqual(len(stages), 1)
             self.assertIn(str(stages[0]), str(caught.exception))
             self.assertTrue((stages[0] / 'runtime-resources.json').is_file())
+            self.assertTrue((stages[0] / 'invoke.ps1').is_file())
             self.assertTrue(result.with_name(result.name + '.request.json').is_file())
             self.assertFalse(result.exists())
 
@@ -434,11 +521,12 @@ class NativeCliAndPublicationTests(unittest.TestCase):
             expected_counts = []
 
             def fake_run(command, **kwargs):
-                encoded = command[-1]; wrapper = base64.b64decode(encoded).decode('utf-16le')
+                encoded = command[-1]
                 sizes.append(len(encoded))
                 self.assertLess(len(encoded), 5000)
                 output = root / ('result%d.json' % len(sizes))
                 newest = max(output.parent.glob('digico-native-runtime-*'), key=lambda p: p.stat().st_mtime_ns)
+                bootstrap, wrapper = self.authenticated_mac_launcher(command, newest)
                 receipt_path = newest / 'runtime-resources.json'
                 receipt = json.loads(receipt_path.read_text())
                 self.assertEqual(len(receipt['resources']), expected_counts[-1])
@@ -447,6 +535,7 @@ class NativeCliAndPublicationTests(unittest.TestCase):
                     self.assertEqual(hashlib.sha256(data).hexdigest(), item['sha256'])
                 self.assertIn(hashlib.sha256(receipt_path.read_bytes()).hexdigest(), wrapper)
                 self.assertEqual(wrapper.count(native.mac_guest_path(newest)), 1)
+                self.assertEqual(bootstrap.count(native.mac_guest_path(newest)), 1)
                 compiled = output.with_name(output.name + '.request.json')
                 digest = hashlib.sha256(compiled.read_bytes()).hexdigest()
                 output.write_text(json.dumps({'status': 'ok', 'request_sha256': digest}))

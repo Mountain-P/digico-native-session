@@ -7,13 +7,15 @@ current value and post-write readback. Cue operations are excluded.
 """
 from __future__ import annotations
 
+from build_profiles import build_value, profile_bound, select_profile
+
 import hashlib
 import json
 import math
 import re
 import struct
 
-TARGET_SHA256 = '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
+TARGET_SHA256 = build_value('executable.sha256')
 SCHEMA_VERSION = 1
 MAX_CONTROLLERS = 200000
 # Exact native engineering-time descriptor: base S with mS/uS prefixes.
@@ -22,21 +24,7 @@ CURVE_NAMES = ('cv_Int', 'cv_Lin', 'cv_Log10', 'cv_RevLog10', 'cv_Sqr',
                'cv_RevSqr', 'cv_Log2', 'cv_Custom', 'cv_Sine', 'cv_Spread')
 # tController.GetValidValues C7E160, exact V2126 PE. Values are numeric labels;
 # display strings are not inferred. EQ shape and Mustard shape have band cases.
-_ENUMS = {
-    0x0102: (0, 1, 2, 3), 0x011A: (1, 2), 0x01E0: (0, 1, 2),
-    0x0204: (0, 1, 2, 3, 4, 5), 0x020B: (0, 1, 2, 3, 4),
-    0x050B: (0, 1, 2), 0x050F: (0, 1, 2), 0x053A: (0, 1, 2),
-    0x08E1: (0, 2, 3, 4, 5), 0x0B02: (0, 1, 2, 3),
-    0x0B1A: (1, 2, 3, 4, 6), 0x0B38: (0, 1, 2),
-    0x0C0B: (0, 1, 2), 0x0C11: (0, 1, 2, 3),
-    0x0E3E: (0, 1, 2), 0x1019: (0, 1, 2),
-    0x1556: (0, 1, 2, 3, 4, 5, 6), 0x1702: (1, 2, 3, 4, 6),
-    0x1802: (1, 2, 3, 4, 6), 0x1A39: (0, 1, 2),
-    0x1A45: (0, 1, 2, 3, 4, 5), 0x1AE1: (0, 2, 3, 4, 5),
-    0x1D0B: (0, 3, 4, 5), 0x1D48: (0, 1, 2),
-    0x1D49: (0, 1, 2), 0x1D4A: (0, 1, 2, 3, 4),
-    0x1E0B: (0, 1, 2), 0x1E4C: (0, 1, 2),
-}
+_ENUMS = {int(key): tuple(value) for key, value in build_value('control_enums').items()}
 
 
 class CatalogError(ValueError):
@@ -90,21 +78,25 @@ def _short(data, offset, maximum, label):
 
 
 def parse_definition(raw_hex):
-    """Decode the exact 58-byte tControllerLibrary record; preserve all bytes."""
-    raw = _hex(raw_hex, 58, 'definition_raw_hex')
-    default = struct.unpack_from('<f', raw, 1)[0]
+    """Decode the selected build's complete tControllerLibrary record."""
+    layout = build_value('layouts.definition')
+    raw = _hex(raw_hex, layout['size'], 'definition_raw_hex')
+    default = struct.unpack_from('<f', raw, layout['default'])[0]
+    data_flags = layout.get('data_flags')
+    colour = layout.get('colour')
     return {
-        'raw_hex': raw.hex(), 'raw_type': raw[0],
-        'default_raw_hex': raw[1:5].hex(),
+        'raw_hex': raw.hex(), 'raw_type': raw[layout['data_type']],
+        'default_raw_hex': raw[layout['default']:layout['default']+4].hex(),
         'default_f32': default if math.isfinite(default) else None,
-        'band': raw[5], 'parameter': raw[6],
-        'name': _short(raw, 7, 31, 'definition name'),
-        'units': _short(raw, 39, 2, 'definition units'),
-        'auto_flags': raw[42], 'snapshot_type': raw[43],
-        'gang_flag': raw[44], 'macro_flag': raw[45],
-        'colour': struct.unpack_from('<i', raw, 46)[0],
-        'response_seed_pointer': struct.unpack_from('<I', raw, 50)[0],
-        'response_lut_pointer': struct.unpack_from('<I', raw, 54)[0],
+        'band': raw[layout['band']], 'parameter': raw[layout['parameter']],
+        'name': _short(raw, layout['name'], layout['name_maximum'], 'definition name'),
+        'units': _short(raw, layout['units'], layout['units_maximum'], 'definition units'),
+        'auto_flags': raw[layout['auto_flags']], 'snapshot_type': raw[layout['snapshot_type']],
+        'gang_flag': raw[layout['gang_flag']], 'macro_flag': raw[layout['macro_flag']],
+        'colour': struct.unpack_from('<i', raw, colour)[0] if colour is not None else None,
+        'response_seed_pointer': struct.unpack_from('<I', raw, layout['seed'])[0],
+        'response_lut_pointer': struct.unpack_from('<I', raw, layout['lut'])[0],
+        'data_flags': raw[data_flags] if data_flags is not None else None,
     }
 
 
@@ -175,6 +167,9 @@ def discrete_values(raw_id_hex, console_type=None):
     """Return native numeric enums, or None when console/band cases are unknown."""
     raw = _hex(raw_id_hex, 5, 'raw_id_hex')
     idlo = int.from_bytes(raw[:2], 'little')
+    if build_value('implementation') == 'quantum-layout-v2':
+        explicit = build_value('control_enums').get(str(idlo))
+        return list(explicit) if explicit is not None else None
     if idlo == 0x0404:
         band = raw[2]
         if band == 0:
@@ -197,7 +192,7 @@ def discrete_values(raw_id_hex, console_type=None):
             return [1, 2]
     if idlo == 0x1C04:
         return {0: [1, 4], 1: [1, 9], 2: [1, 9], 3: [1, 3]}.get(raw[2])
-    return list(_ENUMS.get(idlo, (0, 1)))
+    return list(build_value('control_enums').get(str(idlo), (0, 1)))
 
 
 def _f32(bits):
@@ -205,49 +200,101 @@ def _f32(bits):
 
 
 def semantic_limits(profile, parameter, mode=None):
-    """Exact RangeCheck constants, not display/response-curve guesses."""
-    if profile == 'delay_v2126' and parameter == 8:
-        low, high = 0, 0x3FA66666
-    elif profile == 'eq_q_v2126' and parameter == 6:
-        if mode not in (0, 1, 2, 3, 4) or type(mode) is not int:
-            raise CatalogError('EQ context shape must be an integer in 0..4')
-        low, high = 0x3DCCCCCD, (0x3F59999A if mode in (3, 4) else 0x41A00000)
-    elif profile == 'compressor_v2126' and parameter in (0x11, 0x12):
-        if mode not in (0, 1, 2) or type(mode) is not int:
-            raise CatalogError('compressor context mode must be 0, 1 or 2')
-        low, high = ({0x11: (0x37A7C5AC, 0x3CA3D70A), 0x12: (0x3A83126F, 0x3DCCCCCD)}
-                     if mode == 2 else
-                     {0x11: (0x3A03126F, 0x3DCCCCCD), 0x12: (0x3C23D70A, 0x41200000)})[parameter]
-    elif profile == 'gate_v2126' and parameter in (0x11, 0x12):
-        if mode not in (0, 1, 2) or type(mode) is not int:
-            raise CatalogError('gate context mode must be 0, 1 or 2')
-        low, high = ({0x11: (0x3A03126F, 0x3DCCCCCD), 0x12: (0x3C23D70A, 0x41200000)}
-                     if mode == 2 else
-                     {0x11: (0x3851B717, 0x3DCCCCCD), 0x12: (0x3BA3D70A, 0x40A00000)})[parameter]
-    else:
-        raise CatalogError('unsupported native semantic limit profile')
+    """Exact per-build RangeCheck constants, never display/curve guesses."""
+    if type(parameter) is not int:
+        raise CatalogError('native semantic parameter must be an integer')
+    try:
+        modes = build_value('semantic_limits')[profile][str(parameter)]
+        key = 'default' if 'default' in modes else str(mode)
+        if key != 'default' and type(mode) is not int:
+            raise KeyError(key)
+        low, high = modes[key]
+    except (KeyError, TypeError) as error:
+        raise CatalogError('unsupported native semantic profile/parameter/mode') from error
     return {'minimum': _f32(low), 'maximum': _f32(high),
             'minimum_raw_hex': struct.pack('<I', low).hex(),
             'maximum_raw_hex': struct.pack('<I', high).hex(),
             'source': 'native_callback_context'}
 
 
+def _verified_identity_units(raw, row, definition, response):
+    """Attach engineering identity only for exact seed/code/runtime witnesses."""
+    contract = build_value('unit_contracts').get(raw[:2].hex())
+    if contract is None or response is None:
+        return None
+    if (definition['raw_type'] != contract['raw_type']
+            or row.get('module_vmt_rva') != contract['module_vmt_rva']
+            or row.get('process_output_rva') != contract['process_output_rva']
+            or response['curve_type'] != contract['curve_type']
+            or response['unit_desc_hex'] != contract['unit_descriptor_raw_hex']
+            or response['minimum'] != contract['minimum']
+            or response['maximum'] != contract['maximum']):
+        return None
+    return {'native_unit': contract['native_unit'], 'identity': True,
+            'evidence': list(contract['evidence']), 'physical_audio_verified': False}
+
+
+@profile_bound(feature='control_write', error_type=CatalogError)
+def assert_control_write_allowed(control_id, *, raw_type, definition_rva,
+                                 module_vmt_rva, process_output_rva):
+    """Authorize an exact per-build control family; does not access a target."""
+    raw = _hex(control_id, 5, 'control_id')
+    raw_type = _int(raw_type, 'raw_type', 0, 4)
+    profile = select_profile()
+    rules = profile.get('control_write_allowlist')
+    if rules is None and profile['implementation'] == 'quantum1-v2126-layout-v1':
+        return {'mode':'legacy_profile_domain'}
+    for name,value in (('definition_rva',definition_rva),('module_vmt_rva',module_vmt_rva),
+                       ('process_output_rva',process_output_rva)):
+        _int(value,name,1,profile['executable']['image_size']-1)
+    wanted = {'id_prefix_hex':raw[:3].hex(), 'raw_type':raw_type,
+              'definition_rva':definition_rva, 'module_vmt_rva':module_vmt_rva,
+              'process_output_rva':process_output_rva}
+    matches = [rule for rule in (rules or ()) if all(rule.get(key) == value for key,value in wanted.items())]
+    if len(matches) != 1:
+        raise CatalogError('control is not admitted by the selected build control_write_allowlist')
+    return {'mode':'exact_profile_allowlist', **wanted}
+
+
+def _response_pointer_binding(row, definition):
+    """v2 only: admit the definition domain when fresh current pointers agree."""
+    if build_value('implementation') != 'quantum-layout-v2':
+        return None, None
+    if row.get('response_pointer_binding_verified') is not True:
+        return None, 'current response pointer binding was not copied and verified'
+    pointers = {}
+    for name in ('current_response_seed_pointer','current_response_lut_pointer'):
+        value = row.get(name)
+        if type(value) is not int or not 0 <= value <= 0xffffffff:
+            return None, 'current response pointer binding was not copied and verified'
+        pointers[name] = value
+    seed = definition['response_seed_pointer']; lut = definition['response_lut_pointer']
+    if ((pointers['current_response_seed_pointer'] not in (0,seed))
+            or (pointers['current_response_lut_pointer'] not in (0,lut))):
+        return None, 'runtime response override differs from definition; override domain is not admitted'
+    return {**pointers,'definition_response_seed_pointer':seed,'definition_response_lut_pointer':lut,
+            'effective_response_seed_pointer':seed,'effective_response_lut_pointer':lut,
+            'overrides_admitted':False}, None
+
+
 def _semantic_profile(raw):
+    def copied(name):
+        value = build_value('contexts').get(name)
+        return {'unavailable': name} if value is None else dict(value)
     if raw[1] == 4 and raw[0] == 6 and raw[2] <= 7:
-        return {'profile': 'eq_q_v2126', 'vmt': 0x81BD7C, 'callback': 0x82A938,
-                'mode_parameter': 4, 'mode_module': 4, 'mode_band': raw[2],
-                'mode_slot': 0x58 + 24 * raw[2], 'resending_offset': None}
+        result = copied('eq_q')
+        if 'unavailable' in result:
+            return result
+        result['mode_band'] = raw[2]
+        result['mode_slot'] = result['mode_slot_base'] + result['mode_slot_stride'] * raw[2]
+        return result
     if raw[1] == 5 and raw[0] in (0x11, 0x12):
         if raw[2] in (0, 1, 2):
-            return {'profile': 'compressor_v2126', 'vmt': 0x81C240, 'callback': 0x82BAC0,
-                    'mode_parameter': 0x3A, 'mode_band': 0, 'mode_slot': 0x54,
-                    'resending_offset': 0xE4}
+            return copied('compressor')
         if raw[2] == 3:
-            return {'profile': 'gate_v2126', 'vmt': 0x81C8C0, 'callback': 0x82D3DC,
-                    'mode_parameter': 0x0B, 'mode_band': 3, 'mode_slot': 0x90,
-                    'resending_offset': 0x9E, 'timer_offset': 0x9D}
+            return copied('gate')
     if raw[1] == 9 and raw[0] == 8:
-        return {'profile': 'delay_v2126', 'vmt': 0x81B2F4, 'callback': 0x828640}
+        return copied('delay')
     return None
 
 
@@ -255,13 +302,15 @@ def _control_context(row, raw, rows):
     profile = _semantic_profile(raw)
     if profile is None:
         return None, None, None
+    if 'unavailable' in profile:
+        return None, None, 'native semantic callback context is not admitted for this build'
     if row.get('module_vmt_rva') != profile['vmt'] or row.get('process_output_rva') != profile['callback']:
         return None, None, 'known semantic control has an unrecognized native callback binding'
     owner = row.get('owner_module_pointer')
     if owner is None:
         return None, None, 'native semantic owner pointer is unavailable'
     owner = _int(owner, 'owner_module_pointer', 1, 0xFFFFFFFF)
-    if profile['profile'] == 'delay_v2126':
+    if profile['profile'] == build_value('semantic_profiles.delay_v2126'):
         limits = semantic_limits(profile['profile'], raw[0])
         return {'profile': profile['profile'], 'owner_module_pointer': owner,
                 'limits': limits}, limits, None
@@ -282,7 +331,7 @@ def _control_context(row, raw, rows):
         raise CatalogError('native mode controller ID does not match the recovered owner slot')
     mode_raw = _hex(copied.get('mode_output_raw_hex'), 4, 'context mode output')
     mode_value = struct.unpack('<f', mode_raw)[0]
-    supported_modes = (0., 1., 2., 3., 4.) if profile['profile'] == 'eq_q_v2126' else (0., 1., 2.)
+    supported_modes = (0., 1., 2., 3., 4.) if profile['profile'] == build_value('semantic_profiles.eq_q_v2126') else (0., 1., 2.)
     if not math.isfinite(mode_value) or mode_value not in supported_modes:
         raise CatalogError('native mode output is not a supported discrete value')
     matches = [item for item in rows if item.get('pointer') == mode_pointer]
@@ -293,7 +342,7 @@ def _control_context(row, raw, rows):
             or mode_row.get('owner_module_pointer') != owner
             or _hex(mode_row.get('output_value_raw_hex'), 4, 'mode row output') != mode_raw):
         raise CatalogError('native mode context and copied controller disagree')
-    if mode_row.get('vmt_rva') != 0x8680FC or mode_row.get('definition_pointer') is None:
+    if mode_row.get('vmt_rva') != build_value('addresses.hex_8680fc') or mode_row.get('definition_pointer') is None:
         return None, None, 'native mode controller VMT/definition binding is unavailable'
     mode_definition = parse_definition(mode_row.get('definition_raw_hex'))
     if (mode_definition['raw_type'] != 0 or mode_definition['parameter'] != profile['mode_parameter']
@@ -303,10 +352,10 @@ def _control_context(row, raw, rows):
                'mode_controller_pointer': mode_pointer, 'mode_id_hex': mode_id.hex(),
                'mode_output_raw_hex': mode_raw.hex(), 'mode_value': int(mode_value),
                'mode_controller_slot': profile['mode_slot'], 'resending_offset': profile['resending_offset'],
-               'resending': resending, 'mode_vmt_rva': 0x8680FC,
+               'resending': resending, 'mode_vmt_rva': build_value('addresses.hex_8680fc'),
                'mode_definition_pointer': _int(mode_row['definition_pointer'], 'mode definition pointer', 1, 0xFFFFFFFF),
                'mode_definition_raw_hex': mode_definition['raw_hex']}
-    if profile['profile'] == 'gate_v2126':
+    if profile['profile'] == build_value('semantic_profiles.gate_v2126'):
         timer = _int(copied.get('mode_changed_timer_count'), 'gate mode-changed timer', 0, 255)
         context['mode_changed_timer_count'] = timer
         context['timer_offset'] = profile['timer_offset']
@@ -341,11 +390,12 @@ def _rows(inventory):
     return rows
 
 
+@profile_bound(feature='inventory', documents=('inventory',), error_type=CatalogError)
 def normalize_inventory(inventory):
     """Build a typed inventory from copied runtime records, with no target access.
 
     Required envelope: schema_version=1, executable_sha256 and controllers[] (or
-    groups/channels/modules hierarchy). Rows require raw_id_hex and copied 58-byte
+    groups/channels/modules hierarchy). Rows require raw_id_hex and the selected
     definition_raw_hex. VMT/callback RVAs bind writable entries. Type1 also needs
     response_seed_raw_hex and response_points. Packed route type2 needs explicit
     allowed_values (never arbitrary integers). Additional metadata is retained in
@@ -354,7 +404,7 @@ def normalize_inventory(inventory):
     if not isinstance(inventory, dict) or type(inventory.get('schema_version')) is not int or inventory.get('schema_version') != 1:
         raise CatalogError('inventory.schema_version must be 1')
     target_hash = inventory.get('executable_sha256')
-    if target_hash != TARGET_SHA256:
+    if target_hash != build_value('executable.sha256'):
         raise CatalogError('inventory executable_sha256 does not match Quantum1 V2126 profile')
     rows = _rows(inventory)
     if len(rows) > MAX_CONTROLLERS:
@@ -419,6 +469,8 @@ def normalize_inventory(inventory):
                 'raw_type': raw_type, 'name': definition['name'],
                 'units': definition['units'], 'display_units': definition['units'],
                 'value_units': 'native_internal', 'verified_conversion': None,
+                'verified_identity_units': None,
+                'response_pointer_binding': None,
                 'definition': definition,
                 'payload_type': {0: 'float32_discrete', 1: 'float32', 2: 'int32',
                                  3: 'meter_opaque', 4: 'string'}.get(raw_type, 'unknown'),
@@ -457,9 +509,12 @@ def normalize_inventory(inventory):
                 item['readonly_reason'] = 'discrete response seed was not copied'
             else:
                 item['allowed_values'] = discrete_values(key, console_type)
-                item['value_domain_source'] = 'native_getvalidvalues'
+                item['value_domain_source'] = ('profile_restricted_enum' if build_value('implementation') == 'quantum-layout-v2'
+                                               else 'native_getvalidvalues')
                 if item['allowed_values'] is None:
-                    item['readonly_reason'] = 'native enum depends on unavailable console/band profile'
+                    item['readonly_reason'] = ('native enum has no explicit v2 profile restriction'
+                        if build_value('implementation') == 'quantum-layout-v2'
+                        else 'native enum depends on unavailable console/band profile')
                 elif definition['default_f32'] not in item['allowed_values']:
                     item['readonly_reason'] = 'default contradicts the generic native enum; semantic domain is unresolved'
         elif raw_type == 1:
@@ -496,6 +551,11 @@ def normalize_inventory(inventory):
             item['value_domain_source'] = 'native_callback_context'
         if context_error:
             item['readonly_reason'] = context_error
+        pointer_binding,pointer_error = _response_pointer_binding(row,definition)
+        item['response_pointer_binding'] = pointer_binding
+        if pointer_error and item['readonly_reason'] is None:
+            item['readonly_reason'] = pointer_error
+        item['verified_identity_units'] = _verified_identity_units(raw, row, definition, item['response'])
         if item['response'] is not None and raw_type == 1:
             if item['response']['unit_desc_hex'] == TIME_UNIT_DESCRIPTOR:
                 item['verified_conversion'] = {
@@ -527,9 +587,21 @@ def normalize_inventory(inventory):
                     item['readonly_reason'] = 'native owner VMT/callback binding is unavailable'
             else:
                 item[binding] = _int(value, binding, 1, 0x7FFFFFFF)
+        item['build_write_admitted'] = build_value('features').get('control_write') is True
+        if not item['build_write_admitted'] and item['readonly_reason'] is None:
+            item['readonly_reason'] = 'selected build profile has not admitted native control writes'
+        item['control_write_authorization'] = None
+        if item['build_write_admitted'] and item['readonly_reason'] is None:
+            try:
+                item['control_write_authorization'] = assert_control_write_allowed(key,
+                    raw_type=raw_type, definition_rva=row.get('definition_rva'),
+                    module_vmt_rva=row.get('module_vmt_rva'), process_output_rva=row.get('process_output_rva'))
+            except CatalogError as error:
+                item['readonly_reason'] = str(error)
         item['writable_candidate'] = item['readonly_reason'] is None
         controls.append(item)
     return {'schema_version': 1, 'executable_sha256': target_hash,
+            'build_write_admitted': build_value('features').get('control_write') is True,
             'controls': controls, 'runtime_acceptance_verified': False,
             'inventory_sha256': hashlib.sha256(json.dumps(inventory, sort_keys=True,
                 separators=(',', ':'), ensure_ascii=True, allow_nan=False).encode('utf-8')).hexdigest()}
@@ -562,6 +634,7 @@ def _encode(item, value):
     return (int(encoded) if raw_type == 0 else encoded), data, tolerance
 
 
+@profile_bound(feature='control_write', documents=('catalog',), error_type=CatalogError)
 def plan_control_write(catalog, control_id, value, expected=None):
     """Produce only a typed 4-byte native payload, never a packet or a send.
 
@@ -571,7 +644,7 @@ def plan_control_write(catalog, control_id, value, expected=None):
     """
     key = _hex(control_id, 5, 'control_id').hex()
     if (not isinstance(catalog, dict) or type(catalog.get('schema_version')) is not int
-            or catalog.get('schema_version') != 1 or catalog.get('executable_sha256') != TARGET_SHA256):
+            or catalog.get('schema_version') != 1 or catalog.get('executable_sha256') != build_value('executable.sha256')):
         raise CatalogError('catalog must be a normalized Quantum1 V2126 inventory')
     matches = [item for item in catalog.get('controls', []) if item.get('id') == key]
     if len(matches) != 1:
@@ -579,11 +652,20 @@ def plan_control_write(catalog, control_id, value, expected=None):
     item = matches[0]
     if item.get('readonly_reason') or not item.get('writable_candidate'):
         raise CatalogError(item.get('readonly_reason') or 'controller is not a writable candidate')
+    authorization = assert_control_write_allowed(key, raw_type=item['raw_type'],
+        definition_rva=item['source'].get('definition_rva'), module_vmt_rva=item.get('module_vmt_rva'),
+        process_output_rva=item.get('process_output_rva'))
+    pointer_binding,pointer_error = _response_pointer_binding(item['source'],item['definition'])
+    if pointer_error:
+        raise CatalogError(pointer_error)
     typed, data, tolerance = _encode(item, value)
     result = {'id': key, 'raw_type': item['raw_type'], 'payload_type': item['payload_type'],
               'payload_hex': data.hex(), 'value': typed, 'tolerance': tolerance,
               'value_units': 'native_internal', 'display_units': item['display_units'],
               'verified_conversion': item['verified_conversion'],
+              'verified_identity_units': item['verified_identity_units'],
+              'control_write_authorization': authorization,
+              'response_pointer_binding': pointer_binding,
               'semantic_context': item['semantic_context'], 'response_range': item['response_range'],
               'expected': None, 'expected_payload_hex': None,
               'module_vmt_rva': item['module_vmt_rva'],

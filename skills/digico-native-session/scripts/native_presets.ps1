@@ -33,11 +33,11 @@ function Assert-DiGiCoPresetListUnchanged($Bounds) {
 function Assert-DiGiCoPresetClassAncestor([long]$Address,[long]$ExpectedVMT) {
     $vmt=[long]$reader.U32($Address);$seen=[Collections.Generic.HashSet[long]]::new()
     for($depth=0;$depth-lt 32-and $vmt-ne 0;$depth++) {
-        if($vmt-lt ($base+0x58)-or $vmt-ge ($base+0x4440000)-or -not $seen.Add($vmt)){throw 'Invalid/cyclic native Preset dependency VMT ancestry.'}
+        if($vmt-lt ($base+0x58)-or $vmt-ge ($base+$script:NativeBuildProfile.executable.image_size)-or -not $seen.Add($vmt)){throw 'Invalid/cyclic native Preset dependency VMT ancestry.'}
         if($vmt-eq $ExpectedVMT){return}
         $slot=[long]$reader.U32($vmt-0x30)
         if($slot-eq 0){break}
-        if($slot-lt $base-or $slot-gt ($base+0x4440000-4)){throw 'Invalid native Preset dependency parent VMT slot.'}
+        if($slot-lt $base-or $slot-gt ($base+$script:NativeBuildProfile.executable.image_size-4)){throw 'Invalid native Preset dependency parent VMT slot.'}
         $vmt=[long]$reader.U32($slot)
     }
     throw 'Native Preset dependency does not derive from the expected class.'
@@ -52,7 +52,7 @@ function Read-DiGiCoPresetContent([long]$Preset,[string]$TextEncoding='ascii') {
         $writer.Write([int32]$bounds.count)
         for($c=0;$c-lt $bounds.count;$c++) {
             $channel=[long]$reader.U32($bounds.items+4*$c);$data=$reader.Read($channel,0x58)
-            if([BitConverter]::ToUInt32($data,0)-ne ($base+0x7F90A0)){throw 'Unexpected tChannelSnapshot inside preset.'}
+            if([BitConverter]::ToUInt32($data,0)-ne ($base+$script:NativeBuildProfile.addresses.hex_7f90a0)){throw 'Unexpected tChannelSnapshot inside preset.'}
             $channelId=[int][BitConverter]::ToUInt16($data,0x24)
             $title=Read-DiGiCoPresetText $data 0x26 31 $TextEncoding
             $stereoMode=[int]$data[0x4A]
@@ -64,7 +64,7 @@ function Read-DiGiCoPresetContent([long]$Preset,[string]$TextEncoding='ascii') {
             $writer.Write([byte]$titleBytes.Length);$writer.Write($titleBytes);$writer.Write([int32]$modulesBounds.count)
             for($m=0;$m-lt $modulesBounds.count;$m++) {
                 $module=[long]$reader.U32($modulesBounds.items+4*$m);$mod=$reader.Read($module,0x5C)
-                if([BitConverter]::ToUInt32($mod,0)-ne ($base+0x7F7938)){throw 'Unexpected tModuleSnapshot inside preset.'}
+                if([BitConverter]::ToUInt32($mod,0)-ne ($base+$script:NativeBuildProfile.addresses.hex_7f7938)){throw 'Unexpected tModuleSnapshot inside preset.'}
                 $n=[BitConverter]::ToInt32($mod,0x30);$valuesPointer=[long][BitConverter]::ToUInt32($mod,0x3E)
                 if($n-lt 0-or $n-gt 4096-or ($n-gt 0-and $valuesPointer-eq 0)){throw 'Invalid preset controller-array bounds.'}
                 $totalControls+=$n;if($totalControls-gt 250000){throw 'Preset exceeds local controller readback bound.'}
@@ -100,6 +100,8 @@ function Get-DiGiCoPresetMetadataSignature($Preset,[string[]]$Except=@()) {
     return ($parts.ToArray()-join ':')
 }
 function Assert-DiGiCoPresetStepContract($Step) {
+    Assert-NativeBuildFeature 'presets'
+    Assert-NativeBuildContract $Step
     $types=@{
         store_input_preset=@(3,0xC9);rename_preset=@(3,0xCE);lock_preset=@(1,0xD2)
         update_input_preset=@(1,0xCC);recall_input_preset=@(1,0xC8)
@@ -108,7 +110,7 @@ function Assert-DiGiCoPresetStepContract($Step) {
     }
     if(-not $types.ContainsKey([string]$Step.op)){throw 'Unknown native preset operation.'}
     $pair=$types[[string]$Step.op]
-    $id=('{0:x2}0000b601'-f ([int]$pair[1]))
+    $id=ConvertTo-DiGiCoPresetHex ([byte[]]([BitConverter]::GetBytes([uint16]$pair[1])+[byte[]]@(0)+[BitConverter]::GetBytes([uint16]$script:NativeBuildProfile.presets.group)))
     if($Step.category-ne $pair[0]-or $Step.control_id_hex-ne $id){throw 'Preset category/ControlID differs from the exact native callback contract.'}
     $index=$Step.list_index
     if($index-is [bool]-or $null-eq $index-or $index-isnot [ValueType]-or [decimal]$index-ne [math]::Truncate([decimal]$index)-or [decimal]$index-lt 0-or [decimal]$index-gt 131071){throw 'Invalid native preset ListIndex.'}
@@ -130,14 +132,15 @@ function Assert-DiGiCoPresetStepContract($Step) {
 function Read-DiGiCoNativePresets {
     [CmdletBinding()]
     param([int[]]$ContentIndices=@(),[ValidateSet('ascii','cp950','utf-8')][string]$TextEncoding='ascii')
-    $list=[long]$reader.U32($base+0x126E3E8)
-    if($list-eq 0-or $reader.U32($list)-ne ($base+0x7735B8)){throw 'Unexpected/uninitialized native presets list.'}
+    Assert-NativeBuildFeature 'presets'
+    $list=[long]$reader.U32($base+$script:NativeBuildProfile.addresses.hex_126e3e8)
+    if($list-eq 0-or $reader.U32($list)-ne ($base+$script:NativeBuildProfile.addresses.hex_7735b8)){throw 'Unexpected/uninitialized native presets list.'}
     $bounds=Read-DiGiCoPresetListBounds $list 10000
     foreach($index in $ContentIndices){if($index-lt 0-or $index-ge $bounds.count){throw 'Preset content index outside current list.'}}
     $presets=[Collections.Generic.List[object]]::new();$fingerprints=[Collections.Generic.List[string]]::new()
     for($i=0;$i-lt $bounds.count;$i++) {
         $address=[long]$reader.U32($bounds.items+4*$i);$raw=$reader.Read($address,0x178)
-        if([BitConverter]::ToUInt32($raw,0)-ne ($base+0x77315C)){throw 'Unexpected native tPreset type.'}
+        if([BitConverter]::ToUInt32($raw,0)-ne ($base+$script:NativeBuildProfile.addresses.hex_77315c)){throw 'Unexpected native tPreset type.'}
         $name=Read-DiGiCoPresetText $raw 0x24 31 $TextEncoding
         $group=Read-DiGiCoPresetText $raw 0x44 31 $TextEncoding
         $notes=Read-DiGiCoPresetText $raw 0x64 255 $TextEncoding
@@ -147,31 +150,31 @@ function Read-DiGiCoNativePresets {
         $presets.Add($entry);$fingerprints.Add((Get-DiGiCoPresetMetadataSignature $entry))
     }
     Assert-DiGiCoPresetListUnchanged $bounds
-    if($reader.U32($base+0x126E3E8)-ne $list){throw 'Native preset-list owner changed during readback.'}
-    $scope=$reader.Read($base+0x126E3EC,32)
-    $pathRaw=$reader.Read($base+0x127B4FC,256);$sessionPath=Read-DiGiCoPresetText $pathRaw 0 255 $TextEncoding
+    if($reader.U32($base+$script:NativeBuildProfile.addresses.hex_126e3e8)-ne $list){throw 'Native preset-list owner changed during readback.'}
+    $scope=$reader.Read($base+$script:NativeBuildProfile.addresses.hex_126e3ec,32)
+    $pathRaw=$reader.Read($base+$script:NativeBuildProfile.addresses.hex_127b4fc,256);$sessionPath=Read-DiGiCoPresetText $pathRaw 0 255 $TextEncoding
     $metadata=[Text.Encoding]::UTF8.GetBytes(($fingerprints.ToArray()-join '|'))
-    return [pscustomobject][ordered]@{schema_version=1;subsystem='native-presets-readonly';preset_count=$bounds.count;list_pointer=$list;scope_hex=(ConvertTo-DiGiCoPresetHex $scope);presets=@($presets.ToArray());metadata_sha256=(Get-DiGiCoPresetSHA $metadata);current_session_path=$sessionPath.text;current_session_path_hex=$sessionPath.hex;library_file_path=$null;library_file_path_established=$false;text_encoding=$TextEncoding;memory_read_only=$true}
+    return [pscustomobject][ordered]@{schema_version=1;build_profile=$script:NativeBuildProfile.id;executable_sha256=$script:NativeBuildProfile.executable.sha256;subsystem='native-presets-readonly';preset_count=$bounds.count;list_pointer=$list;scope_hex=(ConvertTo-DiGiCoPresetHex $scope);presets=@($presets.ToArray());metadata_sha256=(Get-DiGiCoPresetSHA $metadata);current_session_path=$sessionPath.text;current_session_path_hex=$sessionPath.hex;library_file_path=$null;library_file_path_established=$false;text_encoding=$TextEncoding;memory_read_only=$true}
 }
 
 function Read-DiGiCoPresetInputChannel([int]$ChannelId) {
     if($ChannelId-lt 0x100-or $ChannelId-gt 0x1FF){throw 'This preset helper supports ordinary input channels only.'}
-    $console=[long]$reader.U32($base+0x1279CFC)
-    if($console-eq 0-or $reader.U32($console)-ne ($base+0x864808)){throw 'Unexpected native console object.'}
+    $console=[long]$reader.U32($base+$script:NativeBuildProfile.addresses.hex_1279cfc)
+    if($console-eq 0-or $reader.U32($console)-ne ($base+$script:NativeBuildProfile.addresses.hex_864808)){throw 'Unexpected native console object.'}
     $groups=Read-DiGiCoPresetListBounds $console 256
     for($g=0;$g-lt $groups.count;$g++) {
         $group=[long]$reader.U32($groups.items+4*$g)
-        Assert-DiGiCoPresetClassAncestor $group ($base+0x86600C)
+        Assert-DiGiCoPresetClassAncestor $group ($base+$script:NativeBuildProfile.addresses.hex_86600c)
         if($reader.U8($group+0x30)-ne 1){continue}
         $channels=Read-DiGiCoPresetListBounds $group 4096
         for($i=0;$i-lt $channels.count;$i++) {
             $channel=[long]$reader.U32($channels.items+4*$i)
-            if($reader.U32($channel)-ne ($base+0x86660C)){throw 'Unexpected native channel type.'}
-            if($reader.U16($channel+0x30)-eq $ChannelId) {
+            if($reader.U32($channel)-ne ($base+$script:NativeBuildProfile.addresses.hex_86660c)){throw 'Unexpected native channel type.'}
+            if($reader.U16($channel+$script:NativeBuildProfile.layouts.channel.id)-eq $ChannelId) {
                 $raw=$reader.Read($channel+0x34,32);$name=Read-DiGiCoPresetText $raw 0 31 'ascii'
                 Assert-DiGiCoPresetListUnchanged $channels
                 Assert-DiGiCoPresetListUnchanged $groups
-                if($reader.U32($base+0x1279CFC)-ne $console){throw 'Native console changed during readback.'}
+                if($reader.U32($base+$script:NativeBuildProfile.addresses.hex_1279cfc)-ne $console){throw 'Native console changed during readback.'}
                 return [pscustomobject]@{pointer=$channel;channel_id=$ChannelId;name_hex=$name.hex;current_preset_pointer=[long]$reader.U32($channel+0x56)}
             }
         }
@@ -181,22 +184,22 @@ function Read-DiGiCoPresetInputChannel([int]$ChannelId) {
 
 function Get-DiGiCoPresetCueReferenceCount([long]$PresetPointer) {
     # Read-only dependency check: deletion's native callback clears these refs.
-    $list=[long]$reader.U32($base+0x127305C)
-    if($list-eq 0-or $reader.U32($list)-ne ($base+0x7F9BB0)){throw 'Cannot verify preset Cue dependencies.'}
+    $list=[long]$reader.U32($base+$script:NativeBuildProfile.addresses.hex_127305c)
+    if($list-eq 0-or $reader.U32($list)-ne ($base+$script:NativeBuildProfile.addresses.hex_7f9bb0)){throw 'Cannot verify preset Cue dependencies.'}
     $bounds=Read-DiGiCoPresetListBounds $list 2000;$count=0
     for($i=0;$i-lt $bounds.count;$i++) {
         $snapshot=[long]$reader.U32($bounds.items+4*$i)
-        if($reader.U32($snapshot)-ne ($base+0x7F8188)){throw 'Unexpected Snapshot type during preset dependency read.'}
+        if($reader.U32($snapshot)-ne ($base+$script:NativeBuildProfile.addresses.hex_7f8188)){throw 'Unexpected Snapshot type during preset dependency read.'}
         $channels=Read-DiGiCoPresetListBounds $snapshot 4096
         for($c=0;$c-lt $channels.count;$c++) {
             $channel=[long]$reader.U32($channels.items+4*$c)
-            if($reader.U32($channel)-ne ($base+0x7F90A0)){throw 'Unexpected channel Snapshot during preset dependency read.'}
+            if($reader.U32($channel)-ne ($base+$script:NativeBuildProfile.addresses.hex_7f90a0)){throw 'Unexpected channel Snapshot during preset dependency read.'}
             if($reader.U32($channel+0x46)-eq $PresetPointer){$count++}
         }
         Assert-DiGiCoPresetListUnchanged $channels
     }
     Assert-DiGiCoPresetListUnchanged $bounds
-    if($reader.U32($base+0x127305C)-ne $list){throw 'Native Snapshot-list owner changed during readback.'}
+    if($reader.U32($base+$script:NativeBuildProfile.addresses.hex_127305c)-ne $list){throw 'Native Snapshot-list owner changed during readback.'}
     return $count
 }
 

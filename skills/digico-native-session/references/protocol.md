@@ -1,5 +1,7 @@
 # Quantum1 V2126 原生協定與RVA
 
+本頁的具體位址與封包案例記錄舊 `quantum1-v2126`。新版必須使用自己的 [build profile](build-profiles.md) 與 feature／control allowlist，不可複製本頁 RVA 或由舊 callback 推定相容。Mirror 的被動 parser 與未完成的初始同步界線另見 [Mirror 研究](mirroring-research.md)。
+
 本頁記錄已驗證client使用的有限協定，不是所有DiGiCo設備的完整API。執行能力以腳本白名單為準。
 
 ## 版本

@@ -47,3 +47,4 @@ venv/
 Thumbs.db
 
 *.progress.json
+*.journal.jsonl

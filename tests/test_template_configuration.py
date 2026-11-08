@@ -3,9 +3,11 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'skills/digico-native-session/scripts/configure_template.py'
+sys.path.insert(0, str(SCRIPT.parent))
 spec = importlib.util.spec_from_file_location('configure_template', SCRIPT)
 template = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(template)

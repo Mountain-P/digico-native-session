@@ -2,9 +2,13 @@
 
 ## 已驗證範圍
 
-在確切Quantum1 V2126／25fps／本機loopback離線編輯器，以拋棄式Session做功能整合測試，涵蓋範本式new session、create／insert／rename／timecode／delete、SaveAs／SaveCurrent、覆寫備份，以及從磁碟恢復未存測試標記的同路徑重載。
+舊 Quantum1 V2126／25fps／本機 loopback 離線編輯器的整合測試，涵蓋範本式 new session、create／insert／rename／timecode／delete、SaveAs／SaveCurrent、覆寫備份，以及從磁碟恢復未存測試標記的同路徑重載。
 
-驗證使用唯讀程序記憶體、檔案hash與原生Save／Load；沒有UI輸入或程序記憶體寫入。Raw name bytes保存與重載已驗證，中文GUI呈現未驗證。其他EXE版本／FPS、實體控台或現場音訊、任意Session的全部mixer欄位及factory reset均不在這項驗證範圍。
+六個新增 exact profile 均已通過未修改公開 `windows_native.ps1` 的隔離 typed-request 回歸：零 Snapshot 範本 Load→SaveAs、Snapshot create／rename／RecallAt／delete 及 Save、未儲存標記後的 alias Reload 與 Snapshot raw 比對。取得 fresh inventory 後，再寫入代表性的 fader、trim、EQ gain、LPF frequency、mute 與 Input name，Save／Reload 後重讀，確認各控制 Value／Output、名稱 bytes 與 Snapshot raw 保留。
+
+這是公開 Windows runner 及各 exact EXE 的操作／持久化證據，不等同六款的 CLI／MCP 傳輸都已獨立端到端實測。逐 build status 與被關閉的 routing／Preset／transfer 以 [能力矩陣](build-profiles.md) 為準，不由舊 Q1 結果推廣。
+
+驗證使用唯讀程序記憶體、檔案 hash 與原生 Save／Load，沒有 UI 輸入或程序記憶體寫入。舊 Q1 的 raw name bytes 保存與重載已有證據，中文 GUI 呈現未驗證。未列出的 EXE／其他 FPS、實體控台或現場音訊、任意 Session 的全部 mixer 欄位與 factory reset 不在驗證範圍。
 
 公開repository不含私人測試Session、流量、範本、歌單或其派生hash。自己的runtime資料也可能包含show內容，請留在本機。
 

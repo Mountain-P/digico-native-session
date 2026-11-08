@@ -1,26 +1,26 @@
 # Semantic physical routing gates. Functions only; no socket/UI/memory writes.
 # Requires native_inventory.ps1 and native_controls.ps1 in the verified runner.
 function Get-NativeRouteProfile([string]$Kind,[int]$InsertIndex=0){
-    switch($Kind){
-        'main'{return @{Kind='main';Module=1;Parameter=0;Band=0;VmtRva=0x81AA44;CallbackRva=0x826848;DefinitionRva=0x8D16C0;ControllerOffset=0x54;FieldOffset=0xB2;FieldName='input_route';Direction='input'}}
-        'alt'{return @{Kind='alt';Module=1;Parameter=0;Band=1;VmtRva=0x81AA44;CallbackRva=0x826848;DefinitionRva=0x8D1BF0;ControllerOffset=0x58;FieldOffset=0xB6;FieldName='alt_input_route';Direction='input'}}
-        'key'{return @{Kind='key';Module=5;Parameter=0x16;Band=0;VmtRva=0x81C8C0;CallbackRva=0x82D3DC;DefinitionRva=0x8D5A0D;ControllerOffset=0x64;FieldOffset=0xBA;FieldName='key_route';Direction='input'}}
-        'mustard_key'{return @{Kind='mustard_key';Module=0x1E;Parameter=0x16;Band=0;VmtRva=0x75FA28;CallbackRva=0x762288;DefinitionRva=0x8D5A0D;ControllerOffset=0x5C;FieldOffset=$null;FieldName=$null;Direction='input'}}
-        'insert_return'{if($InsertIndex-notin @(0,1)){throw 'Insert index must be 0 or 1.'};return @{Kind='insert_return';Module=8;Parameter=0;Band=$InsertIndex;VmtRva=0x81B570;CallbackRva=0x828C68;DefinitionRva=0x8D2D1B;ControllerOffset=0x5C;FieldOffset=$null;FieldName=$null;Direction='input'}}
-        'insert_send'{if($InsertIndex-notin @(0,1)){throw 'Insert index must be 0 or 1.'};return @{Kind='insert_send';Module=8;Parameter=0xFE;Band=$InsertIndex;VmtRva=0x81B570;CallbackRva=0x828C68;DefinitionRva=0x8D2CE1;ControllerOffset=0x58;FieldOffset=$null;FieldName=$null;Direction='output'}}
-        'output'{return @{Kind='output';Module=14;Parameter=0xFE;Band=0;VmtRva=0x81A3CC;CallbackRva=0x824F9C;DefinitionRva=0x8D738F;ControllerOffset=0x50;FieldOffset=$null;FieldName=$null;Direction='output'}}
-        default{throw 'Unsupported semantic route kind.'}
-    }
+    Assert-NativeBuildFeature 'routes'
+    $entry=$script:NativeBuildProfile.routing.source_profiles.PSObject.Properties[$Kind]
+    if($Kind-eq 'output'){$source=$script:NativeBuildProfile.routing.output_profile}
+    elseif($null-ne $entry){$source=$entry.Value}else{throw 'Unsupported semantic route kind.'}
+    $band=[int]$source.band
+    if($Kind-in @('insert_return','insert_send')){if($InsertIndex-notin @(0,1)){throw 'Insert index must be 0 or 1.'};$band=$InsertIndex}
+    $field=[string]$source.field;$fieldOffset=$null
+    if($field){$fieldOffset=$script:NativeBuildProfile.layouts.channel.$field}
+    $direction='input';if($source.PSObject.Properties['direction']){$direction=[string]$source.direction}
+    return @{Kind=$Kind;Module=[int]$source.module;Parameter=[int]$source.parameter;Band=$band;VmtRva=[long]$source.vmt;CallbackRva=[long]$source.callback;DefinitionRva=[long]$source.definition;ControllerOffset=[int]$source.slot;FieldOffset=$fieldOffset;FieldName=$field;Direction=$direction}
 }
 
 function Assert-NativeRouteTreeNode([long]$Pointer){
     $node=$Pointer
     for($depth=0;$depth-lt 8;$depth++){
-        $parent=[long]$reader.U32($node+0x24)
+        $parent=[long]$reader.U32($node+$script:NativeBuildProfile.layouts.console_list.parent)
         if($parent-eq 0){throw 'Physical routing endpoint has no console owner chain.'}
         Assert-NativeChild $parent $node
         $ctx=New-NativeControlContext;$type=Get-NativeInventoryType $ctx $parent
-        if($type.kind-eq 'console'){if($parent-ne $reader.U32($base+0x1279CFC)){throw 'Physical endpoint belongs to another console.'};return}
+        if($type.kind-eq 'console'){if($parent-ne $reader.U32($base+$script:NativeBuildProfile.addresses.hex_1279cfc)){throw 'Physical endpoint belongs to another console.'};return}
         $node=$parent
     }
     throw 'Physical routing endpoint owner depth exceeded.'
@@ -30,30 +30,30 @@ function Assert-NativeRouteEndpoint($Endpoint,[string]$Direction='input'){
     if($Direction-notin @('input','output')){throw 'Unknown physical routing endpoint direction.'}
     $portIndex=[int]$Endpoint.port_index;$socket=[int]$Endpoint.socket_index
     if($portIndex-lt 0-or $portIndex-gt 48-or $socket-lt 0-or $socket-gt 255){throw 'Invalid physical endpoint index.'}
-    $groupBase=0x1C;$expectedVmt=0x759440;if($Direction-eq 'output'){$groupBase=0x4E;$expectedVmt=0x75A0E0}
+    $groupBase=0x1C;$expectedVmt=$script:NativeBuildProfile.addresses.hex_759440;if($Direction-eq 'output'){$groupBase=0x4E;$expectedVmt=$script:NativeBuildProfile.addresses.hex_75a0e0}
     $channelId=(($groupBase+$portIndex)-shl 8)-bor $socket
     $channel=[long]$Endpoint.channel_pointer;$module=[long]$Endpoint.source_module_pointer
-    if($channelId-ne [int]$Endpoint.source_channel_id-or $reader.U16($channel+0x30)-ne $channelId){throw 'Physical source channel identity changed.'}
+    if($channelId-ne [int]$Endpoint.source_channel_id-or $reader.U16($channel+$script:NativeBuildProfile.layouts.channel.id)-ne $channelId){throw 'Physical source channel identity changed.'}
     $ctx=New-NativeControlContext;$channelType=Get-NativeInventoryType $ctx $channel;$moduleType=Get-NativeInventoryType $ctx $module
-    if($channelType.kind-ne 'channel'-or $moduleType.vmt_rva-ne $expectedVmt-or $reader.U32($module+0x24)-ne $channel-or $reader.I32($module+0x4A)-ne 1){throw 'Physical socket-module binding changed.'}
-    if((Hex ($reader.Read($module+0x30,5)))-cne $Endpoint.source_module_id_hex){throw 'Physical source module ID changed.'}
+    if($channelType.kind-ne 'channel'-or $moduleType.vmt_rva-ne $expectedVmt-or $reader.U32($module+$script:NativeBuildProfile.layouts.console_list.parent)-ne $channel-or $reader.I32($module+0x4A)-ne 1){throw 'Physical socket-module binding changed.'}
+    if((Hex ($reader.Read($module+$script:NativeBuildProfile.layouts.module.id,5)))-cne $Endpoint.source_module_id_hex){throw 'Physical source module ID changed.'}
     Assert-NativeChild $channel $module;Assert-NativeRouteTreeNode $channel
     if($Direction-eq 'input'){
-        $listen=[long]$reader.U32($module+0x7C)
-        if($listen-eq 0-or $listen-ne [long]$Endpoint.listen_to_copy_control_pointer-or $reader.U32($listen+0x44)-ne $module){throw 'Physical source copy-listen controller binding differs.'}
-        $next=$reader.Read($listen+0x1C,4)
+        $listen=[long]$reader.U32($module+$script:NativeBuildProfile.layouts.input_socket.listen_to_copy)
+        if($listen-eq 0-or $listen-ne [long]$Endpoint.listen_to_copy_control_pointer-or $reader.U32($listen+$script:NativeBuildProfile.layouts.controller.parent)-ne $module){throw 'Physical source copy-listen controller binding differs.'}
+        $next=$reader.Read($listen+$script:NativeBuildProfile.layouts.controller.target,4)
         if((Hex $next)-cne $Endpoint.listen_to_copy_next_raw_hex-or [BitConverter]::ToSingle($next,0)-ne 0){throw 'Physical source uses its copy route; refusing an ambiguous physical source.'}
     }else{
-        $routeControl=[long]$reader.U32($module+0x54)
-        if($reader.U8($module+0x83)-eq 0-or $routeControl-eq 0-or $routeControl-ne [long]$Endpoint.route_control_pointer-or $reader.U32($routeControl+0x44)-ne $module){throw 'Physical output is inactive or its source controller changed.'}
+        $routeControl=[long]$reader.U32($module+$script:NativeBuildProfile.layouts.output_socket.source_control)
+        if($reader.U8($module+$script:NativeBuildProfile.layouts.output_socket.active)-eq 0-or $routeControl-eq 0-or $routeControl-ne [long]$Endpoint.route_control_pointer-or $reader.U32($routeControl+$script:NativeBuildProfile.layouts.controller.parent)-ne $module){throw 'Physical output is inactive or its source controller changed.'}
         $lib=[long]$reader.U32($routeControl+9)
-        if($reader.U8($lib)-ne 2-or $reader.U8($routeControl+4)-ne 0-or (Hex ($reader.Read($routeControl+0x2C,4)))-cne $Endpoint.current_source_raw_hex){throw 'Physical output source value or datatype changed.'}
+        if($reader.U8($lib)-ne 2-or $reader.U8($routeControl+4)-ne 0-or (Hex ($reader.Read($routeControl+$script:NativeBuildProfile.layouts.controller.output,4)))-cne $Endpoint.current_source_raw_hex){throw 'Physical output source value or datatype changed.'}
     }
-    $portArray=[long]$reader.U32($base+0x8E8E9C);$record=$portArray+0xD2*$portIndex
+    $portArray=[long]$reader.U32($base+$script:NativeBuildProfile.addresses.hex_8e8e9c);$record=$portArray+0xD2*$portIndex
     if($record-ne [long]$Endpoint.port_record_pointer-or (Hex ($reader.Read($record,0xD2)))-cne $Endpoint.port_record_raw_hex){throw 'Native port-record binding changed.'}
     if($reader.U8($record+0xD0)-ne [int]$Endpoint.port_type-or $reader.U8($record+0xD1)-ne [int]$Endpoint.port_number){throw 'Native physical port key differs.'}
-    $io=[long]$reader.U32($base+0x911110);$device=[long]$Endpoint.configured_device_pointer
-    if($io-eq 0-or $reader.U32($io)-ne ($base+0x2F85BC)-or $reader.U32($device)-ne ($base+0x2F7C58)){throw 'Configured I/O table/device class differs.'}
+    $io=[long]$reader.U32($base+$script:NativeBuildProfile.addresses.hex_911110);$device=[long]$Endpoint.configured_device_pointer
+    if($io-eq 0-or $reader.U32($io)-ne ($base+$script:NativeBuildProfile.addresses.hex_2f85bc)-or $reader.U32($device)-ne ($base+$script:NativeBuildProfile.addresses.hex_2f7c58)){throw 'Configured I/O table/device class differs.'}
     Assert-NativeChild $io $device
     if($reader.U8($device+0xE)-ne [int]$Endpoint.port_number-or $reader.U8($device+0xF)-ne [int]$Endpoint.port_type){throw 'Configured I/O device no longer matches the port.'}
     $countOffset=4;$arrayOffset=0x19;if($Direction-eq 'output'){$countOffset=8;$arrayOffset=0x1D}
@@ -65,6 +65,9 @@ function Assert-NativeRouteEndpoint($Endpoint,[string]$Direction='input'){
 }
 
 function Read-NativeRouteBinding($Step){
+    Assert-NativeBuildFeature 'routes'
+    Assert-NativeBuildContract $Step
+    Assert-NativeBuildContract $Step.route_contract
     $kind='main';if($Step.PSObject.Properties['route_kind']){$kind=[string]$Step.route_kind}
     $insertIndex=0;if($Step.PSObject.Properties['insert_index']){$insertIndex=[int]$Step.insert_index}
     $profile=Get-NativeRouteProfile $kind $insertIndex
@@ -75,7 +78,7 @@ function Read-NativeRouteBinding($Step){
     if($bound.raw_type-ne 2-or $bound.definition_pointer-ne ($base+$profile.DefinitionRva)-or [long]$Step.control_contract.module_vmt_rva-ne $profile.VmtRva-or [long]$Step.control_contract.process_output_rva-ne $profile.CallbackRva){throw 'Native route definition or code binding differs.'}
     if($reader.U32($bound.owner_pointer+$profile.ControllerOffset)-ne $bound.pointer){throw 'Owner does not reference this semantic route controller.'}
     $channel=[long]$reader.U32($bound.owner_pointer+0x24)
-    if($reader.U16($channel+0x30)-ne $channelId-or $reader.U8($channel+0x55)-ne 1-or $reader.I32($bound.owner_pointer+0x4A)-ne 1){throw 'Routing currently requires the observed mono Input channel.'}
+    if($reader.U16($channel+$script:NativeBuildProfile.layouts.channel.id)-ne $channelId-or $reader.U8($channel+0x55)-ne 1-or $reader.I32($bound.owner_pointer+$script:NativeBuildProfile.layouts.module.n_signals)-ne 1){throw 'Routing currently requires the observed mono Input channel.'}
     $routeRaw=$bound.output_raw
     if($null-ne $profile.FieldOffset){$routeRaw=$reader.Read($channel+$profile.FieldOffset,4)}
     $route=[BitConverter]::ToInt32($routeRaw,0)
@@ -83,15 +86,15 @@ function Read-NativeRouteBinding($Step){
 }
 
 function Read-NativeRouteOutputSockets([long]$Channel){
-    $list=[long]$reader.U32($Channel+0xF1)
+    $list=[long]$reader.U32($Channel+$script:NativeBuildProfile.layouts.channel.output_sockets)
     if($list-eq 0){throw 'Output socket list is missing.'}
     $ctx=New-NativeControlContext;$type=Get-NativeInventoryType $ctx $list
-    if(-not ($type.ancestors-contains ($base+0x47660))){throw 'Output socket list has an unexpected class.'}
+    if(-not ($type.ancestors-contains ($base+$script:NativeBuildProfile.addresses.hex_47660))){throw 'Output socket list has an unexpected class.'}
     $n=$reader.I32($list+8);$a=[long]$reader.U32($list+4)
     if($n-lt 0-or $n-gt 384-or ($n-gt 0-and $a-eq 0)){throw 'Invalid output socket bounds.'}
     $raw=[byte[]]@();if($n-gt 0){$raw=$reader.Read($a,4*$n)};$values=[Collections.Generic.List[long]]::new()
     for($i=0;$i-lt $n;$i++){$v=[long][BitConverter]::ToUInt32($raw,4*$i);if($values.Contains($v)){throw 'Duplicate native output-socket entry.'};$values.Add($v)}
-    if($reader.U32($Channel+0xF1)-ne $list-or $reader.U32($list+4)-ne $a-or $reader.I32($list+8)-ne $n){throw 'Output socket list changed while reading.'}
+    if($reader.U32($Channel+$script:NativeBuildProfile.layouts.channel.output_sockets)-ne $list-or $reader.U32($list+4)-ne $a-or $reader.I32($list+8)-ne $n){throw 'Output socket list changed while reading.'}
     return ,@($values.ToArray()|Sort-Object)
 }
 
@@ -153,7 +156,7 @@ function Wait-NativeRouteWrite($Step){
         if($binding.profile.Kind-eq 'output'){
             $matches=$matches-and (Test-NativeRouteOutputSet $binding.channel_pointer $Step.route_contract.expected_output_sockets)
             $routeControl=[long]$reader.U32([long]$Step.destination.source_module_pointer+0x54)
-            $matches=$matches-and ($routeControl-eq [long]$Step.destination.route_control_pointer)-and ((Hex ($reader.Read($routeControl+0x2C,4)))-ceq $Step.route_contract.target_source_raw_hex)
+            $matches=$matches-and ($routeControl-eq [long]$Step.destination.route_control_pointer)-and ((Hex ($reader.Read($routeControl+$script:NativeBuildProfile.layouts.controller.output,4)))-ceq $Step.route_contract.target_source_raw_hex)
         }
         if($binding.profile.Kind-eq 'insert_send'){
             if($null-ne $Step.source){$p=[long]$Step.source.route_control_pointer;$matches=$matches-and ((Hex ($reader.Read($p+0x2C,4)))-ceq $Step.route_contract.target_source_raw_hex)}
@@ -167,19 +170,22 @@ function Wait-NativeRouteWrite($Step){
 }
 
 function Read-NativeGroupAssignmentBinding($Step){
+    Assert-NativeBuildFeature 'routes'
+    Assert-NativeBuildContract $Step
+    Assert-NativeBuildContract $Step.group_contract
     $bound=Read-NativeControlBinding $Step;$id=ConvertFrom-NativeControlHex $Step.id 5
     $channelId=[int]$Step.channel_id;$groupId=[int]$Step.group_channel_id;$index=$groupId-band 255;$contract=$Step.group_contract
     if($channelId-lt 0x100-or $channelId-gt 0x1FF-or $groupId-lt 0x600-or $groupId-gt 0x6FF-or $id[0]-ne 9-or $id[1]-ne 3-or $id[2]-ne $index-or $id[3]-ne ($channelId-band 255)-or $id[4]-ne 1){throw 'Group assignment packed identity differs.'}
-    if($bound.raw_type-ne 0-or [long]$Step.control_contract.module_vmt_rva-ne 0x81D950-or [long]$Step.control_contract.process_output_rva-ne 0x83042C-or $bound.definition_pointer-ne [long]$Step.control_contract.definition_pointer-or $bound.definition[5]-ne $index){throw 'Group assignment code/definition binding differs.'}
+    if($bound.raw_type-ne 0-or [long]$Step.control_contract.module_vmt_rva-ne $script:NativeBuildProfile.addresses.hex_81d950-or [long]$Step.control_contract.process_output_rva-ne $script:NativeBuildProfile.addresses.hex_83042c-or $bound.definition_pointer-ne [long]$Step.control_contract.definition_pointer-or $bound.definition[5]-ne $index){throw 'Group assignment code/definition binding differs.'}
     $source=[long]$reader.U32($bound.owner_pointer+0x24)
-    if($source-ne [long]$contract.source_channel_pointer-or $reader.U16($source+0x30)-ne $channelId-or $reader.U8($source+0x55)-ne 1-or $reader.I32($bound.owner_pointer+0x4A)-ne 1){throw 'Group assignment source is not the observed mono Input.'}
+    if($source-ne [long]$contract.source_channel_pointer-or $reader.U16($source+$script:NativeBuildProfile.layouts.channel.id)-ne $channelId-or $reader.U8($source+$script:NativeBuildProfile.layouts.channel.stereo_mode)-ne 1-or $reader.I32($bound.owner_pointer+$script:NativeBuildProfile.layouts.module.n_signals)-ne 1){throw 'Group assignment source is not the observed mono Input.'}
     $target=[long]$contract.target_channel_pointer;$fader=[long]$contract.target_fader_pointer
     $ctx=New-NativeControlContext;$type=Get-NativeInventoryType $ctx $target
-    $mode=[int]$reader.U8($target+0x55)
-    if($type.kind-ne 'channel'-or $reader.U16($target+0x30)-ne $groupId-or $mode-notin @(1,2)-or $mode-ne [int]$contract.target_stereo_mode-or $reader.U16($target+0x62)-ne [int]$contract.target_buss_id){throw 'Target Group Output identity/layout differs.'}
-    if($reader.U32($target+0x1AE)-ne $fader-or $reader.U32($fader)-ne ($base+0x81E510)-or $reader.U32($fader+0x24)-ne $target-or $reader.I32($fader+0x4A)-ne $mode-or (Hex ($reader.Read($fader+0x30,5)))-cne $contract.target_fader_id_hex){throw 'Target Group Fader code/owner/signals binding differs.'}
+    $mode=[int]$reader.U8($target+$script:NativeBuildProfile.layouts.channel.stereo_mode)
+    if($type.kind-ne 'channel'-or $reader.U16($target+$script:NativeBuildProfile.layouts.channel.id)-ne $groupId-or $mode-notin @(1,2)-or $mode-ne [int]$contract.target_stereo_mode-or $reader.U16($target+$script:NativeBuildProfile.layouts.channel.buss_id)-ne [int]$contract.target_buss_id){throw 'Target Group Output identity/layout differs.'}
+    if($reader.U32($target+$script:NativeBuildProfile.layouts.channel.fader_module)-ne $fader-or $reader.U32($fader)-ne ($base+$script:NativeBuildProfile.addresses.hex_81e510)-or $reader.U32($fader+$script:NativeBuildProfile.layouts.console_list.parent)-ne $target-or $reader.I32($fader+$script:NativeBuildProfile.layouts.module.n_signals)-ne $mode-or (Hex ($reader.Read($fader+0x30,5)))-cne $contract.target_fader_id_hex){throw 'Target Group Fader code/owner/signals binding differs.'}
     Assert-NativeChild $target $fader;Assert-NativeRouteTreeNode $target
-    $bits=$reader.Read($source+0xBE,32)
+    $bits=$reader.Read($source+$script:NativeBuildProfile.layouts.channel.buss_routes,32)
     return [pscustomobject]@{control=$bound;source_channel_pointer=$source;target_channel_pointer=$target;bit_index=$index;buss_routes=$bits}
 }
 

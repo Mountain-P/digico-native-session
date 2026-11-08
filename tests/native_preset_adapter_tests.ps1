@@ -2,8 +2,11 @@
 [CmdletBinding()]
 param([string]$AdapterModulePath='',[string]$PresetModulePath='')
 $ErrorActionPreference='Stop'
-if(-not $AdapterModulePath){$AdapterModulePath=Join-Path $PSScriptRoot '..\skill\digico-native-session\scripts\native_preset_adapter.ps1'}
-if(-not $PresetModulePath){$PresetModulePath=Join-Path $PSScriptRoot '..\skill\digico-native-session\scripts\native_presets.ps1'}
+if(-not $AdapterModulePath){$AdapterModulePath=Join-Path $PSScriptRoot '..\skills\digico-native-session\scripts\native_preset_adapter.ps1'}
+if(-not $PresetModulePath){$PresetModulePath=Join-Path $PSScriptRoot '..\skills\digico-native-session\scripts\native_presets.ps1'}
+$SkillRoot=Split-Path (Split-Path $PresetModulePath -Parent) -Parent
+. (Join-Path $SkillRoot 'scripts\native_profile.ps1')
+$null=Set-NativeBuildProfile -ExecutableSha256 '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
 . $PresetModulePath
 . $AdapterModulePath
 function Assert-PresetAdapterTest([bool]$Condition,[string]$Message){if(-not $Condition){throw $Message}}
@@ -22,13 +25,13 @@ function Frame([int]$Category,[int]$Group,[int]$Control,[int]$Index,[byte[]]$Bod
     return ,$raw
 }
 function New-AdapterStep([string]$Op,[int]$Category,[int]$Control,[int]$Index,[byte[]]$Body){
-    return [pscustomobject]@{op=$Op;category=$Category;control_id_hex=('{0:x2}0000b601'-f $Control);list_index=$Index;body_hex=(ConvertTo-DiGiCoPresetHex $Body);frames=@((ConvertTo-DiGiCoPresetHex (Frame $Category 438 $Control $Index $Body)));expected_count_after=0}
+    return [pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';op=$Op;category=$Category;control_id_hex=('{0:x2}0000b601'-f $Control);list_index=$Index;body_hex=(ConvertTo-DiGiCoPresetHex $Body);frames=@((ConvertTo-DiGiCoPresetHex (Frame $Category 438 $Control $Index $Body)));expected_count_after=0}
 }
 function Read-DiGiCoPresetInputChannel([int]$ChannelId){if($ChannelId-ne 0x100){throw 'Unknown mock input'};return [pscustomobject]@{channel_id=$ChannelId}}
-$state=[pscustomobject]@{preset_count=1;list_pointer=0x2000;metadata_sha256=('ab'*32);scope_hex=('00'*32);current_session_path_hex='433a5c53796e7468657469635c466978747572652e736573';text_encoding='ascii';presets=@([pscustomobject]@{index=0;pointer=0x3000;group_name_hex='53796e746865746963204c6162'})}
-$binding=[pscustomobject]@{preset_count=1;list_pointer=0x2000;metadata_sha256=$state.metadata_sha256;scope_hex=$state.scope_hex;current_session_path_hex=$state.current_session_path_hex;selected_index=0;selected_pointer=0x3000}
+$state=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';preset_count=1;list_pointer=0x2000;metadata_sha256=('ab'*32);scope_hex=('00'*32);current_session_path_hex='433a5c53796e7468657469635c466978747572652e736573';text_encoding='ascii';presets=@([pscustomobject]@{index=0;pointer=0x3000;group_name_hex='53796e746865746963204c6162'})}
+$binding=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';preset_count=1;list_pointer=0x2000;metadata_sha256=$state.metadata_sha256;scope_hex=$state.scope_hex;current_session_path_hex=$state.current_session_path_hex;selected_index=0;selected_pointer=0x3000}
 $step=New-AdapterStep 'rename_preset' 3 0xCE 0 ([byte[]](1,0,0,0,65));$step|Add-Member name_hex '41'
-$request=[pscustomobject]@{preset_operation='preset_rename';preset_inventory_binding=$binding;steps=@($step);expected_count=0;final_expected_preset_count=1;final_expected_scope_hex=$state.scope_hex}
+$request=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';preset_operation='preset_rename';preset_inventory_binding=$binding;steps=@($step);expected_count=0;final_expected_preset_count=1;final_expected_scope_hex=$state.scope_hex}
 Assert-DiGiCoPresetAdapterBinding $request $state
 Assert-DiGiCoPresetAdapterPlan $request $state
 $bad=$step.PSObject.Copy();$bad.frames=@('00')
@@ -40,7 +43,7 @@ Assert-PresetAdapterThrows {Assert-DiGiCoPresetAdapterBinding $badRequest $state
 $scopeHex='0830'+('00'*30)
 $scope=New-AdapterStep 'set_preset_recall_scope' 2 0xD3 0 ([byte[]]([BitConverter]::GetBytes([uint32]32)+(ConvertFrom-DiGiCoPresetAdapterHex $scopeHex 32)))
 $scope|Add-Member expected_scope_hex $scopeHex
-$scopeRequest=[pscustomobject]@{preset_operation='preset_set_scope';preset_inventory_binding=$binding;steps=@($scope);expected_count=0;final_expected_preset_count=1;final_expected_scope_hex=$scopeHex}
+$scopeRequest=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';preset_operation='preset_set_scope';preset_inventory_binding=$binding;steps=@($scope);expected_count=0;final_expected_preset_count=1;final_expected_scope_hex=$scopeHex}
 Assert-DiGiCoPresetAdapterPlan $scopeRequest $state
 Assert-PresetAdapterTest ($scopeRequest.steps.Count-eq 1-and $scopeRequest.final_expected_scope_hex-eq $scopeHex) 'Set scope must be a real retained setter.'
 

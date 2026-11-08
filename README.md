@@ -1,96 +1,94 @@
 # DiGiCo Native Session
 
-以 DiGiCo 原生 TCP 操作 **Windows Quantum1 V2126 離線編輯器**的 Codex skill 與命令列工具。支援範本式 Session、混音參數、路由、處理 Preset、狀態／電平讀取與 MCP，並保留 Snapshot 編輯及 25fps RecallAt。所有修改由唯讀 `ReadProcessMemory` 回讀確認。
+以 DiGiCo 原生 TCP 操作 Windows Quantum 離線編輯器的 Codex skill、CLI 與 MCP。0.3 加入逐 build 的能力與控制 allowlist、具名稱／單位的 authoring、分階段執行、journal 查核及 Windows writer lease。操作不使用 OSC、UI 自動化或程序記憶體寫入；修改後以唯讀 `ReadProcessMemory` 回讀確認。
 
-操作不使用 OSC、UI 自動化或程序記憶體寫入。目前範圍是確切 V2126 build、25fps、控制 `127.0.0.1:2028`、唯讀狀態 `127.0.0.1:2029`；實體控台、其他版本與任意遠端主機未驗證。
+支援範圍由**確切 EXE SHA-256、profile 與功能開關**共同決定。以下都是離線編輯器與 25fps Session 的範圍；不延伸到實體控台、實際音訊、任意軟體版本或遠端主機。
 
-## 功能與界線
+## Build 與能力
 
-| 功能 | 行為 |
-|---|---|
-| `inspect` | 唯讀取得 Snapshot count、名稱 bytes、RecallAt、flags 與目前 Session 路徑，不建立原生 TCP 連線 |
-| `status`／`meters` | 原生狀態回應、快取電平及來源／freshness資訊 |
-| `structure` | 讀原生123-byte結構與已辨識的counts／rates；不提供重建結構 setter |
-| `inventory`／`catalog` | 探索實際通道、模組、定義、數值範圍與可寫候選 |
-| 混音參數／名稱 | 原生 float32、離散 enum、嚴格編碼通道名稱；依當前模式驗證 |
-| 路由／Group | mono Input 主備輸入、key、Insert、實體輸出及群組分配 |
-| Session 匯出 | 原生區塊傳輸、ACK、SessionVerify、hash核對；不接受 mirror |
-| Preset | Input processing 庫存、capture／rename／update／recall、scope、lock、delete |
-| MCP | 本機 stdio、10個 typed tools、寫入預設 dry-run |
-| `plan` | 離線驗證 JSON、模擬 index 變化並產生封包計畫，不接觸 VM／編輯器 |
-| `new_session` | 載入自己的零 Snapshot 範本，另存新檔；保留範本的結構與 routing |
-| Snapshot 操作 | 從目前 console state 建立、刪除、改名、設定並啟用 RecallAt |
-| Save／Load | 由原廠編輯器寫入及讀取 `.ses`，另以狀態與檔案驗證 |
+| Profile | 離線編輯器 | 讀取¹ | `status` | 控制寫入 | Snapshot／Session 檔案² | Routing／Preset／原生匯出 |
+|---|---|---|---|---|---|---|
+| `quantum1-v2126` | Quantum1 V2126 | 支援 | 支援 | 原有型別／domain 契約 | 支援 | 支援原有範圍 |
+| `quantum1-v2242-4` | Quantum1 V2242.4 | 支援 | 支援 | exact allowlist | 支援 | 未開放 |
+| `quantum2-v2242-4` | Quantum2 V2242.4 | 支援 | 未開放 | exact allowlist | 支援 | 未開放 |
+| `quantum3-v2242` | Quantum3 V2242（326／338） | 支援 | 未開放 | exact allowlist | 支援 | 未開放 |
+| `quantum5-v2242` | Quantum5 V2242（升級 SD5） | 支援 | 未開放 | exact allowlist | 支援 | 未開放 |
+| `quantum7-v2242` | Quantum7 V2242（`SD7Q.exe`） | 支援 | 未開放 | exact allowlist | 支援 | 未開放 |
+| `quantum8-v2242` | Quantum8 V2242 | 支援 | 支援 | exact allowlist | 支援 | 未開放 |
 
-`new_session` 是範本式新檔，不是 factory reset。`create` 本身不會替不同 Cue 產生不同 mixer 設定。混音與路由使用獨立語意操作；工具不直接自行序列化 `.ses`。
+¹ `inspect`、`inventory`、`catalog`、`structure`、`meters`；catalog 是本機 inventory 轉換。Meter 是離線編輯器快取，不證明實際訊號。² Snapshot create／insert／rename／timecode／delete、SaveAs／Save、含同路徑 alias 的 Load，以及零 Snapshot 範本載入後另存。
 
-混音與路由操作見 [非 Cue 指南](skills/digico-native-session/references/noncue.md)，MCP 啟動與設定見 [MCP](skills/digico-native-session/references/mcp.md)。完整範圍與證據層級見 [能力與驗證](CAPABILITIES.md)。
+新版控制只開放逐 build 證實的 numeric／boolean ID prefix 與 Input 名稱；定義、datatype、owner callback、response／enum domain、模式及當前值仍須吻合。清單不代表所有 channel、模式或 UI 功能可寫。Quantum5 範圍只包含升級 SD5；Quantum7 的 `SD7Q.exe` 不等於一般 SD7。Quantum638 尚未找到可核對的現行官方 offline download，維持未解決，不以 Quantum8 代替。
+
+新版六款均已通過未修改公開 Windows runner 的隔離回歸：範本新檔、Snapshot 編輯、Save／Reload，以及代表性控制與 Input 名稱的保存重載回讀。舊 Q1 保留既有能力。這項證據的範圍是 Windows runner；各款 CLI／MCP 傳輸整合另行區分。詳見 [能力與驗證](CAPABILITIES.md) 及 [驗證](skills/digico-native-session/references/validation.md)。
 
 ## 安裝與準備
-
-Repository 中的 skill 位於 [`skills/digico-native-session`](skills/digico-native-session/SKILL.md)。可將整個資料夾安裝到自己的 Codex skills 目錄，例如 `~/.codex/skills/digico-native-session`，或直接執行其中的腳本。
 
 ```sh
 git clone https://github.com/Mountain-P/digico-native-session.git
 cd digico-native-session
 ```
 
-安裝後可用 `$digico-native-session` 加上工作要求，例如「用25fps建立新Session，加入Cue A與Cue B，再儲存到指定路徑」。首次使用 `new_session` 前先完成下方的本機範本設定。
+Skill 位於 [`skills/digico-native-session`](skills/digico-native-session/SKILL.md)，可整份安裝到自己的 Codex skills 目錄，或直接使用腳本。需要 Python 3、Windows PowerShell、已安裝並啟動的相符離線編輯器；Mac 可使用既有 Parallels VM。工具不啟動 VM、安裝編輯器、修改 INI／防火牆或變更 FPS。
 
-需要 Python 3、Windows PowerShell，以及已安裝並啟動的 Quantum1 V2126 離線編輯器。Mac 可透過既有 Parallels VM 執行；工具不啟動 VM、安裝編輯器、改 INI／防火牆或變更 FPS。EXE 路徑需明確指定，SHA-256 必須為：
-
-```text
-535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d
-```
-
-原生 Network 選項需已啟用。執行器固定連 loopback，並拒絕已有非 loopback connected peer 的目標；這不等於編輯器本身所有 listener／廣播都已隔離。環境細節見 [Windows 與 Parallels](skills/digico-native-session/references/windows-host.md)。
-
-## 公開版不附 Session 範本
-
-本 repository 不包含原廠 installer／EXE／DLL，亦不包含任何 `.ses` 或本機範本 manifest。使用 `new_session` 前，請準備自己的同版本、25fps、零 Snapshot Session。
-
-若目前編輯器已是零 Snapshot，可先 inspect，透過原生 `save_as` 儲存成自己的範本檔，再以 CLI 複製或匯入。若目前有 Cue，不應把現有 show 直接另存後當作空範本；使用符合需求的既有空白檔，或在明確要清空 Snapshot 的工作中逐步刪除、回讀並另存。
+`profile` 只顯示隨附 metadata，不啟動或讀取目標程序：
 
 ```sh
-python3 skills/digico-native-session/scripts/configure_template.py \
-  --source /absolute/path/to/your-empty-session.ses
+python3 skills/digico-native-session/scripts/native_session.py profile \
+  --build-profile quantum1-v2242-4
 ```
 
-在 Windows 執行可使用 `python` 及 Windows 本機路徑。腳本只檢查檔頭、版本與 hash，**不會連線或證明 Snapshot 數為零**；manifest 會標示 `snapshot_count_verified=false`。`new_session` 仍須實際原生載入並讀回 count0，且 FPS 為25，才會另存新檔。既有本機範本不會被默默覆寫。範本準備與語意見 [操作格式](skills/digico-native-session/references/operations.md#本機空範本)。
+原生 Network 選項需已啟用。控制連線固定為 `127.0.0.1:2028`；受支援的 status 使用 `2029`。Runner 驗證 listener 與已建立控制連線屬於所選 PID，並拒絕已有非 loopback connected peer 的目標；這不代表編輯器本身的 listener／廣播均已隔離。環境與 Mac 的 SHA 驗證 staging 見 [Windows／Parallels](skills/digico-native-session/references/windows-host.md)。
 
-## 使用流程
+## 使用
 
-以下是 Mac／Parallels 範例；請替換 VM 名稱與 Windows EXE 路徑。`--result` 使用全新絕對路徑。
+以下為合成路徑；先換成實際 VM、EXE、PID 與全新絕對 result 路徑。`plan` 在 request 與 artifact 都沒有 profile 時預設舊 Q1；新版 raw request 可明列 `build_profile`，或在 `execute` 用 `--build-profile` 補選。已有 request／inventory identity 必須相符，不能只換 EXE 路徑。
 
 ```sh
 SKILL_ROOT="$PWD/skills/digico-native-session"
 WORK_DIR="$HOME/Documents/DiGiCoWork"
 python3 "$SKILL_ROOT/scripts/native_session.py" inspect \
+  --build-profile quantum1-v2242-4 \
   --vm 'Your Windows VM' --exe 'C:\DiGiCo\Quantum1\Quantum1.exe' \
-  --encoding ascii --result "$WORK_DIR/inspect-001.json"
-
-python3 "$SKILL_ROOT/scripts/native_session.py" plan \
-  --request examples/create-cues.json --output "$WORK_DIR/plan-001.json"
-
-python3 "$SKILL_ROOT/scripts/native_session.py" execute \
-  --request examples/create-cues.json --send \
-  --vm 'Your Windows VM' --exe 'C:\DiGiCo\Quantum1\Quantum1.exe' \
-  --result "$WORK_DIR/execute-001.json"
+  --process-id 1234 --encoding ascii --result "$WORK_DIR/inspect-001.json"
 ```
 
-先依 inspect 的實際 count 調整原始 request 的 `expected_count`，確認 Session 輸出路徑的父資料夾已存在，再 plan／execute。只做離線規劃時可使用自己提供的 count，無需 Windows／VM；它不代表已在編輯器執行。
+Snapshot／檔案操作使用 `plan` 與 `execute`；先依 inspect 調整原始 request 的 `expected_count`，再送同一份原始 request。`execute` 省略 `--send` 只做 dry-run，不呼叫 Windows runner。範例與格式見 [`examples`](examples) 及 [操作格式](skills/digico-native-session/references/operations.md)。
 
-`execute` 沒有 `--send` 是 dry-run，只輸出計畫，不執行 Windows runner；CLI 仍要求 target／result 參數。`execute` 接收原始 request，不能用 plan 輸出的 `steps` 取代它。
+混音編輯先讀所需 channel 的 detailed inventory，再使用原生名稱／ID，或已核准的語意 alias：
 
-[`examples`](examples) 只使用虛構的 Cue A／Cue B。詳細 JSON schema 見 [操作格式](skills/digico-native-session/references/operations.md)，成功判定與中斷恢復見 [驗證](skills/digico-native-session/references/validation.md)，封包及 RVA 見 [協定](skills/digico-native-session/references/protocol.md)。
+```sh
+python3 "$SKILL_ROOT/scripts/native_session.py" author \
+  --request examples/authoring-fader.json --inventory "$WORK_DIR/inventory-001.json" \
+  --output "$WORK_DIR/authoring-preview.json"
+```
 
-## 驗證狀態
+`author-execute` 預設 dry-run，加 `--send` 才執行。Mode 變更隔成獨立 stage；每個 barrier 都重新取得 inventory、核對同一 target 並重編下一階段。結果不明即停止，保留部分收據，不自動重播或 rollback。單位只接受已驗證的契約；詳見 [authoring](skills/digico-native-session/references/authoring.md)。舊 Q1 的 routing／Preset／匯出見 [非 Cue 指南](skills/digico-native-session/references/noncue.md)。
 
-已在隔離的 Quantum1 V2126／25fps 離線編輯器完成功能整合測試：範本式 new session、create／insert／rename／timecode／delete、SaveAs／SaveCurrent、同路徑重載與 overwrite 備份，並以唯讀狀態回讀確認。名稱 raw bytes 的保存與重載亦已驗證；中文 GUI 顯示未驗證。
+Authoring 從 inventory 繼承 profile；不要在其嚴格 schema 加 `build_profile`。範例的 `expected_count` 仍須換成當次值。`authoring-controls.json` 另展示舊 Q1 的 EQ mode barrier，不適用新版未開放的語意 alias。
 
-實際使用仍需讀取這一次的 result：`status="ok"`、`verified_steps` 與 `after`。送包成功不是編輯成功；發生 timeout 或 `indeterminate_operation` 時先重新 inspect，依已確認進度恢復，不重送整批 create／delete。本機長批次曾停止進展，根因未確定；執行器在已驗證的操作邊界重連，不會重播結果不明的操作。
+[MCP 0.3.0](skills/digico-native-session/references/mcp.md) 提供相同 typed CLI 的本機 stdio 工具，包括 profile、authoring 與 recovery；寫入預設 dry-run，實際送出須 literal `send:true`。
 
-執行結果、流量與本機範本可能含自己的 show 資訊。範本、常用runtime檔名與工作目錄已列入 `.gitignore`；自行選擇其他檔名時，公開前仍需檢查 staged 內容。
+## 自己的 Session 範本
+
+公開版不附 installer、EXE、DLL、`.ses` 或本機 template manifest。`new_session` 會載入自己的**同 build、25fps、零 Snapshot** 範本並另存新檔，保留範本結構與 routing；它不是 factory reset。
+
+```sh
+python3 "$SKILL_ROOT/scripts/configure_template.py" \
+  --build-profile quantum1-v2242-4 --source /absolute/work/synthetic-empty.ses
+```
+
+新版必須選對 `--build-profile`，每個 profile 使用獨立 template 與 manifest。匯入只驗 header／版本／hash，不能證明 count0；`new_session` 仍須載入後讀回 count0 與 25fps 才另存。既有本機範本不會覆寫，見 [本機範本](skills/digico-native-session/references/operations.md#本機空範本)。
+
+## 驗證與中斷
+
+以本次 result 的 `status`、`verified_steps` 與 `after` 判斷成功；socket write 返回不代表編輯器接受。Host target lock 與 [guest writer lease](skills/digico-native-session/references/write-lease.md) 協調同目標 writer，仍須逐步回讀。讀取可以有界重試；結果不明的編輯不會自動重送。
+
+每個 runner 留下 request、result、hash-chain journal 與流量；authoring 另留 intent、工作目錄與 attempted artifact 路徑。`recover` 只查核本機 journal，不能重播。Timeout 或 `indeterminate_operation` 後先用新 inspect／inventory 確認實際狀態，再規劃剩餘操作。參閱 [恢復](skills/digico-native-session/references/recovery.md)。
+
+Mirror 目前只有有界、被動 parser／state ledger 及獨立 SessionVerify 研究；`initial_sync_complete=false`。這不是完整初始同步，也沒有公開 raw socket、Mirror 寫入或任意主機 API。見 [Mirror 研究界線](skills/digico-native-session/references/mirroring-research.md)。
+
+Runtime 檔案可能包含自己的 show 資訊；保留在私人工作目錄，公開前檢查 staged 內容。測試與範例只使用合成資料。
 
 ## 開發驗證
 
@@ -98,4 +96,4 @@ python3 "$SKILL_ROOT/scripts/native_session.py" execute \
 python3 -m unittest discover -s tests -v
 ```
 
-測試與GitHub Actions執行離線schema、封包、編碼、資源staging與本機範本匯入檢查，不啟動Windows或連線編輯器。Windows功能整合的驗證方式另見 [驗證文件](skills/digico-native-session/references/validation.md)。程式碼採 [MIT License](LICENSE)。
+GitHub Actions 另跑 Windows PowerShell 合成測試，涵蓋 parser、endpoint owner、lease、journal 與等待／狀態綁定。這些測試不啟動編輯器，也不能取代各 build 的實際 native 回歸。程式碼採 [MIT License](LICENSE)。

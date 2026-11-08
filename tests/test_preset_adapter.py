@@ -127,7 +127,10 @@ class PresetAdapterTests(unittest.TestCase):
 
     def test_after_result_is_valid_presets_input(self):
         doc=presets();state=doc.pop('presets');doc['presets_after']=state
-        self.assertIs(a.normalize_presets(doc),state)
+        result=a.normalize_presets(doc)
+        self.assertEqual(result['presets'],state['presets'])
+        self.assertEqual(result['build_profile'],'quantum1-v2126')
+        self.assertNotIn('build_profile',state)
 
     def test_root_compiler_delegates_with_separate_presets_input(self):
         import native_session

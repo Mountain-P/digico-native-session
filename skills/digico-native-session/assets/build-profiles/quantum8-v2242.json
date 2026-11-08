@@ -1,0 +1,1021 @@
+{
+  "schema_version": 1,
+  "id": "quantum8-v2242",
+  "family": "Quantum",
+  "model": "Quantum8",
+  "release": 2242,
+  "executable": {
+    "name": "Quantum8.exe",
+    "sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+    "pointer_size": 4,
+    "preferred_image_base": 4194304,
+    "image_size": 75460608,
+    "file_version": "22.0.0.2242"
+  },
+  "transport": {
+    "host": "127.0.0.1",
+    "tcp_port": 2028,
+    "udp_discovery_port": 2029,
+    "protocol_version": 2242,
+    "allowed_fps": [
+      25
+    ],
+    "status_tcp_port": 2029
+  },
+  "runtime": {
+    "console_global_rva": 20313992,
+    "snapshot_list_global_rva": 20284720,
+    "session_path_rva": 20320136,
+    "fps_rva": 20318140,
+    "network_manager_global_rva": 20310688,
+    "native_peer_active_rva": 20318202,
+    "session_load_result_rva": 20291996,
+    "save_worker_global_rva": 20258804,
+    "protocol_version_rva": 20315104,
+    "identity_name_rva": 20318248,
+    "snapshot_list_vmt_rva": 7606964,
+    "snapshot_vmt_rva": 7600268,
+    "save_worker_vmt_rva": 5843896
+  },
+  "addresses": {
+    "hex_126e368": 20311248,
+    "hex_126e3e8": 20284796,
+    "hex_126e3ec": 20284800,
+    "hex_126e670": 20310688,
+    "hex_127305c": 20284720,
+    "hex_1279cfc": 20313992,
+    "hex_127a158": 20315104,
+    "hex_127a17c": 20315140,
+    "hex_127ad30": 20318140,
+    "hex_127ad6e": 20318202,
+    "hex_127ad9c": 20318248,
+    "hex_127b4fc": 20320136,
+    "hex_2f7c58": 3134572,
+    "hex_2f85bc": 3136976,
+    "hex_2f977c": 3141516,
+    "hex_4440000": 75460608,
+    "hex_47660": 295896,
+    "hex_535038": 5843896,
+    "hex_7544a4": 9004996,
+    "hex_759440": 3558684,
+    "hex_75a0e0": 3562060,
+    "hex_75c964": null,
+    "hex_75fa28": 9182420,
+    "hex_762288": 9193388,
+    "hex_77315c": 7682460,
+    "hex_7735b8": 7683576,
+    "hex_7f7938": 7598140,
+    "hex_7f8188": 7600268,
+    "hex_7f90a0": 7604132,
+    "hex_7f9bb0": 7606964,
+    "hex_81a3cc": 9027684,
+    "hex_81aa44": 9029340,
+    "hex_81b2f4": 9031564,
+    "hex_81b570": 9032200,
+    "hex_81bd7c": 9034260,
+    "hex_81c240": 9035480,
+    "hex_81c8c0": 9037144,
+    "hex_81d950": 9041384,
+    "hex_81e510": 9044392,
+    "hex_824f9c": 9071668,
+    "hex_826848": 9078048,
+    "hex_828640": 9085720,
+    "hex_828c68": 9087296,
+    "hex_82a938": 9094656,
+    "hex_82bac0": 9099144,
+    "hex_82d3dc": 9105820,
+    "hex_83042c": 9118324,
+    "hex_8645d4": 9473216,
+    "hex_864808": 9473780,
+    "hex_86600c": 9479928,
+    "hex_86660c": 9481464,
+    "hex_867a2c": 9486808,
+    "hex_8680fc": 9488552,
+    "hex_8aae5c": 9771140,
+    "hex_8d16c0": 9939594,
+    "hex_8d1bf0": 9940939,
+    "hex_8d2ce1": 9945340,
+    "hex_8d2d1b": 9945399,
+    "hex_8d5a0d": 9957080,
+    "hex_8d738f": 9963703,
+    "hex_8e8e9c": 10039536,
+    "hex_8e92a8": 10040620,
+    "hex_8e9980": 10042400,
+    "hex_911110": 10203408,
+    "hex_911114": 10203412,
+    "hex_913a2c": 10213932,
+    "hex_913a30": 10213936,
+    "hex_a2443c": 11330564,
+    "hex_a24440": 11330568,
+    "hex_a28490": 20258804,
+    "hex_a28560": 20291996,
+    "hex_b753bc": null,
+    "hex_b7569c": null,
+    "hex_b757f8": null,
+    "hex_b7594c": null,
+    "hex_b75da4": null,
+    "hex_b75f50": null,
+    "hex_b7605c": null,
+    "hex_c6a1bf": null,
+    "hex_c6a290": null,
+    "hex_c6a362": null
+  },
+  "routing": {
+    "source_profiles": {
+      "main": {
+        "module": 1,
+        "parameter": 0,
+        "band": 0,
+        "class": "tInputModule",
+        "vmt": 9029340,
+        "callback": 9078048,
+        "definition": 9939594,
+        "slot": 84,
+        "field": "input_route"
+      },
+      "alt": {
+        "module": 1,
+        "parameter": 0,
+        "band": 1,
+        "class": "tInputModule",
+        "vmt": 9029340,
+        "callback": 9078048,
+        "definition": 9940939,
+        "slot": 88,
+        "field": "alt_input_route"
+      },
+      "key": {
+        "module": 5,
+        "parameter": 22,
+        "band": 0,
+        "owner_band": 1,
+        "class": "tGateModule",
+        "vmt": 9037144,
+        "callback": 9105820,
+        "definition": 9957080,
+        "slot": 100,
+        "field": "key_route"
+      },
+      "mustard_key": {
+        "module": 30,
+        "parameter": 22,
+        "band": 0,
+        "class": "tTidalGateModule",
+        "vmt": 9182420,
+        "callback": 9193388,
+        "definition": 9957080,
+        "slot": 92,
+        "field": null
+      },
+      "insert_return": {
+        "module": 8,
+        "parameter": 0,
+        "band": 0,
+        "definition_band": 0,
+        "class": "tInsertModule",
+        "vmt": 9032200,
+        "callback": 9087296,
+        "definition": 9945399,
+        "slot": 92,
+        "field": null
+      },
+      "insert_send": {
+        "module": 8,
+        "parameter": 254,
+        "band": 0,
+        "definition_band": 0,
+        "class": "tInsertModule",
+        "vmt": 9032200,
+        "callback": 9087296,
+        "definition": 9945340,
+        "slot": 88,
+        "field": null,
+        "direction": "output"
+      }
+    },
+    "output_profile": {
+      "module": 14,
+      "parameter": 254,
+      "band": 0,
+      "class": "tOutputModule",
+      "vmt": 9027684,
+      "callback": 9071668,
+      "definition": 9963703,
+      "slot": 80,
+      "field": null,
+      "direction": "output"
+    }
+  },
+  "layouts": {
+    "controller": {
+      "size": 100,
+      "id": 4,
+      "definition": 9,
+      "identity_bytes": 13,
+      "states": 17,
+      "flags": 18,
+      "value": 24,
+      "target": 28,
+      "db": 32,
+      "next_db": 36,
+      "previous_output": 40,
+      "output": 44,
+      "auto_mode": 48,
+      "next_auto_mode": 49,
+      "display_style": 53,
+      "flash_level": 54,
+      "input_time": 59,
+      "parent": 76,
+      "audio_id": 80,
+      "restore": 88,
+      "nvr": 92,
+      "value_region_bytes": 24,
+      "current_response_seed": 67,
+      "current_response_lut": 71
+    },
+    "console_list": {
+      "size": 52,
+      "parent": 36
+    },
+    "console": {
+      "size": 108,
+      "rp_controls": 48,
+      "track_arm": 64
+    },
+    "group": {
+      "size": 164,
+      "id": 48,
+      "name": 49,
+      "recall_scope": 89,
+      "update_scope": 121
+    },
+    "module": {
+      "size": 84,
+      "id": 48,
+      "definition": 53,
+      "changed_since_snapshot": 57,
+      "child_preset_active": 58,
+      "input_gain": 59,
+      "gang_control": 68,
+      "n_signals": 74,
+      "process_output_vmt_slot": 64
+    },
+    "channel": {
+      "size": 488,
+      "id": 48,
+      "type": 49,
+      "logical": 50,
+      "name": 52,
+      "stereo_mode": 85,
+      "buss_id": 98,
+      "engine_channel": 128,
+      "tidal_channel": 130,
+      "socket_group_index": 175,
+      "input_route": 179,
+      "alt_input_route": 183,
+      "key_route": 187,
+      "buss_routes": 191,
+      "output_sockets": 242,
+      "fader_module": 431,
+      "module_references": 431,
+      "control_references": 443,
+      "data_record": 48,
+      "data_record_bytes": 374,
+      "group_aux_send_enabled": 168
+    },
+    "input_socket": {
+      "size": 156,
+      "copy_to_route": 120,
+      "listen_to_copy": 124
+    },
+    "output_socket": {
+      "size": 136,
+      "source_control": 84,
+      "active": 131
+    },
+    "definition": {
+      "size": 59,
+      "data_type": 0,
+      "default": 1,
+      "band": 5,
+      "parameter": 6,
+      "name": 7,
+      "units": 39,
+      "seed": 50,
+      "lut": 54,
+      "auto_flags": 42,
+      "snapshot_type": 43,
+      "gang_flag": 44,
+      "macro_flag": 45,
+      "colour": 46,
+      "data_flags": 58,
+      "name_maximum": 31,
+      "units_maximum": 2
+    },
+    "list": {
+      "size": 16,
+      "items": 4,
+      "count": 8,
+      "capacity": 12
+    },
+    "meter_manager": {
+      "size": 51304,
+      "index": 49226,
+      "minimum": 49222,
+      "synthetic_cycle": 49217,
+      "configuration": 40,
+      "configuration_bytes": 13
+    },
+    "response_seed": {
+      "size": 38,
+      "curve_type": 0,
+      "unit_descriptor": 1,
+      "unit_descriptor_bytes": 31,
+      "point_count": 32,
+      "points": 34,
+      "point_size": 8,
+      "point_position": 0,
+      "point_value": 4,
+      "lut_bytes": 1024
+    },
+    "snapshot": {
+      "size": 2004,
+      "name": 40,
+      "name_capacity": 31,
+      "flags": 1072,
+      "recall_at": 1903,
+      "recall_at_active_mask": 128
+    },
+    "network_peer": {
+      "size": 567,
+      "connected": 299,
+      "socket": 269,
+      "address": 0,
+      "master": 300,
+      "broadcast": 301,
+      "active_transfer": 293
+    },
+    "save_worker": {
+      "size": 320,
+      "finished": 17,
+      "terminated": 14,
+      "fatal": 40,
+      "path": 48,
+      "error": 305,
+      "copy_error": 306
+    }
+  },
+  "implementation": "quantum-layout-v2",
+  "release_label": "V2242",
+  "validation": {
+    "stage": "offline_runtime_verified",
+    "offline_runtime_verified": true,
+    "physical_console_verified": false,
+    "coverage": "Exact executable, isolated offline editor, loopback TCP and read-only memory verification. Selected default-context control writes were read back and restored; this is not all values, modes, channels or hardware audio."
+  },
+  "features": {
+    "inventory": true,
+    "control_write": true,
+    "routes": false,
+    "meters": true,
+    "presets": false,
+    "structure": true,
+    "transfer": false,
+    "snapshots": true,
+    "template": true,
+    "session_files": true,
+    "inspect": true,
+    "status": true
+  },
+  "control_write_allowlist": [
+    {
+      "id_prefix_hex": "010100",
+      "raw_type": 1,
+      "definition_rva": 9940526,
+      "module_vmt_rva": 9029340,
+      "process_output_rva": 9078048
+    },
+    {
+      "id_prefix_hex": "010101",
+      "raw_type": 1,
+      "definition_rva": 9940585,
+      "module_vmt_rva": 9029340,
+      "process_output_rva": 9078048
+    },
+    {
+      "id_prefix_hex": "010200",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010201",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010202",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010203",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010204",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010205",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010206",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010207",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010208",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "010209",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "01020a",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "01020b",
+      "raw_type": 1,
+      "definition_rva": 9958515,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020200",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020201",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020202",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020203",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020204",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020205",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020206",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020207",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020208",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020209",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "02020a",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "02020b",
+      "raw_type": 0,
+      "definition_rva": 9958574,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "020400",
+      "raw_type": 0,
+      "definition_rva": 9946282,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "030200",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030201",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030202",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030203",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030204",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030205",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030206",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030207",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030208",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "030209",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "03020a",
+      "raw_type": 1,
+      "definition_rva": 9958692,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040200",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040201",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040202",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040203",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040204",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040205",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040206",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040207",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040208",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "040209",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "04020a",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "04020b",
+      "raw_type": 0,
+      "definition_rva": 9958751,
+      "module_vmt_rva": 9038956,
+      "process_output_rva": 9111712
+    },
+    {
+      "id_prefix_hex": "050400",
+      "raw_type": 1,
+      "definition_rva": 9946518,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "050401",
+      "raw_type": 1,
+      "definition_rva": 9946931,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "050402",
+      "raw_type": 1,
+      "definition_rva": 9947344,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "050403",
+      "raw_type": 1,
+      "definition_rva": 9947757,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "050700",
+      "raw_type": 1,
+      "definition_rva": 9946042,
+      "module_vmt_rva": 9033732,
+      "process_output_rva": 9093000
+    },
+    {
+      "id_prefix_hex": "070400",
+      "raw_type": 1,
+      "definition_rva": 9946695,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "070401",
+      "raw_type": 1,
+      "definition_rva": 9947108,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "070402",
+      "raw_type": 1,
+      "definition_rva": 9947521,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "070403",
+      "raw_type": 1,
+      "definition_rva": 9947934,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656
+    },
+    {
+      "id_prefix_hex": "210c00",
+      "raw_type": 1,
+      "definition_rva": 9960327,
+      "module_vmt_rva": 9044392,
+      "process_output_rva": 9126508
+    },
+    {
+      "id_prefix_hex": "220c00",
+      "raw_type": 0,
+      "definition_rva": 9960386,
+      "module_vmt_rva": 9044392,
+      "process_output_rva": 9126508
+    },
+    {
+      "id_prefix_hex": "ff0100",
+      "raw_type": 4,
+      "definition_rva": 9939653,
+      "module_vmt_rva": 9029340,
+      "process_output_rva": 9078048
+    }
+  ],
+  "control_enums": {
+    "514": [
+      0,
+      1
+    ],
+    "516": [
+      0,
+      1
+    ],
+    "1026": [
+      0,
+      1
+    ],
+    "3106": [
+      0,
+      1
+    ]
+  },
+  "unit_contracts": {
+    "0101": {
+      "native_unit": "dB",
+      "raw_type": 1,
+      "module_vmt_rva": 9029340,
+      "process_output_rva": 9078048,
+      "curve_type": 1,
+      "unit_descriptor_raw_hex": "02644200000000000000000000000000000000000000000000000000000000",
+      "minimum": -40,
+      "maximum": 60,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    },
+    "0507": {
+      "native_unit": "Hz",
+      "raw_type": 1,
+      "module_vmt_rva": 9033732,
+      "process_output_rva": 9093000,
+      "curve_type": 6,
+      "unit_descriptor_raw_hex": "1500000000006b487a00487a00000000000000000000000000000000000000",
+      "minimum": 25,
+      "maximum": 25000,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    },
+    "0504": {
+      "native_unit": "Hz",
+      "raw_type": 1,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656,
+      "curve_type": 6,
+      "unit_descriptor_raw_hex": "1500000000006b487a00487a00000000000000000000000000000000000000",
+      "minimum": 20,
+      "maximum": 20000,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    },
+    "0704": {
+      "native_unit": "dB",
+      "raw_type": 1,
+      "module_vmt_rva": 9034260,
+      "process_output_rva": 9094656,
+      "curve_type": 1,
+      "unit_descriptor_raw_hex": "02644200000000000000000000000000000000000000000000000000000000",
+      "minimum": -18,
+      "maximum": 18,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    },
+    "210c": {
+      "native_unit": "dB",
+      "raw_type": 1,
+      "module_vmt_rva": 9044392,
+      "process_output_rva": 9126508,
+      "curve_type": 1,
+      "unit_descriptor_raw_hex": "02644200000000000000000000000000000000000000000000000000000000",
+      "minimum": -150,
+      "maximum": 10,
+      "evidence": [
+        "nativeSeedUnits",
+        "nativeSetReadbackAndRestore"
+      ],
+      "physical_audio_verified": false
+    }
+  },
+  "authoring_aliases": [
+    "fader"
+  ],
+  "semantic_profiles": {},
+  "semantic_limits": {},
+  "contexts": {
+    "compressor": null,
+    "gate": null,
+    "eq_q": null,
+    "delay": null
+  },
+  "presets": {},
+  "session_file": {
+    "header_hex": "44694769436f2020202020513820202e53455320764f2020200d",
+    "template_filename": "quantum8-v2242-empty.ses",
+    "manifest_filename": "quantum8-v2242-empty-template.json",
+    "model_label": "Quantum8",
+    "file_version": "22.0.0.2242"
+  },
+  "feature_validation": {
+    "inventory": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Selected destination-channel and physical I/O inventory; copied 55/59-byte definitions and controller response-pointer witnesses."
+    },
+    "control_write": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "35 numeric and 26 restricted 0/1 controller families plus channel-name write/restore. Exact definition, owner and callback allowlist; default context only. Current response overrides remain rejected.",
+      "verified_numeric_rules": 35,
+      "verified_boolean_rules": 26,
+      "verified_name_rules": 1,
+      "boolean_subset": [
+        0,
+        1
+      ]
+    },
+    "routes": {
+      "stage": "unsupported",
+      "offline_runtime_verified": false,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Not admitted for this exact build."
+    },
+    "meters": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Selected bounded read-only meter request and decoding; offline synthetic levels, no physical audio validation."
+    },
+    "presets": {
+      "stage": "unsupported",
+      "offline_runtime_verified": false,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Not admitted for this exact build."
+    },
+    "structure": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Read-only current Session structure; structural edits are unsupported."
+    },
+    "transfer": {
+      "stage": "unsupported",
+      "offline_runtime_verified": false,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Not admitted for this exact build."
+    },
+    "snapshots": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Synthetic native Snapshot create, name and 25fps RecallAt authoring, reload fingerprint restoration, and deletion."
+    },
+    "template": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Zero-Snapshot template load and SaveAs with source preservation; no factory reset or binary template is distributed."
+    },
+    "session_files": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Native SaveAs, Save and same-path sentinel reload with source preservation."
+    },
+    "inspect": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Read-only loaded path, Snapshot state and 25fps observation."
+    },
+    "status": {
+      "stage": "offline_runtime_verified",
+      "offline_runtime_verified": true,
+      "executable_sha256": "8a1ebea910691d614394505b5a9c72fab43559cf51679038cd20383e91847634",
+      "coverage": "Exact-version bounded TCP status request and parse."
+    }
+  }
+}

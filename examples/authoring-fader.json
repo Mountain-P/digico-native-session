@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "kind": "authoring",
+  "fps": 25,
+  "encoding": "ascii",
+  "expected_count": 0,
+  "operations": [
+    {
+      "op": "set",
+      "channel": {"type": 1, "logical": 1},
+      "parameter": "fader",
+      "value": {"value": -12, "unit": "native"}
+    },
+    {
+      "op": "rename",
+      "channel": {"type": 1, "logical": 1},
+      "name": "Synthetic Input A"
+    }
+  ]
+}

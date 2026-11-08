@@ -26,6 +26,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $scripts=Join-Path $PWD 'skills/digico-native-session/scripts'
+          $skillRoot=Split-Path $scripts -Parent
           Get-ChildItem "$scripts/*.ps1" | ForEach-Object {
             $tokens=$null; $parseErrors=$null
             [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$parseErrors)
@@ -36,3 +37,12 @@ jobs:
           & ./tests/native_presets_readback_tests.ps1 -PresetModulePath "$scripts/native_presets.ps1"
           & ./tests/native_preset_adapter_tests.ps1 -AdapterModulePath "$scripts/native_preset_adapter.ps1" -PresetModulePath "$scripts/native_presets.ps1"
           & ./tests/native_structure_readback_tests.ps1 -StructureModulePath "$scripts/native_structure.ps1"
+          & ./tests/native_endpoint_parser_tests.ps1 -EndpointModulePath "$scripts/native_endpoint.ps1"
+          & ./tests/native_endpoint_owner_tests.ps1 -EndpointModulePath "$scripts/native_endpoint.ps1"
+          & ./tests/native_profile_tests.ps1 -ProfileModulePath "$scripts/native_profile.ps1"
+          & ./tests/native_control_allowlist_tests.ps1 -ProfileModulePath "$scripts/native_profile.ps1" -ControlModulePath "$scripts/native_controls.ps1"
+          & ./tests/native_journal_tests.ps1 -JournalModulePath "$scripts/native_journal.ps1"
+          & ./tests/native_state_retry_tests.ps1 -RunnerPath "$scripts/windows_native.ps1"
+          & ./tests/native_session_file_identity_tests.ps1 -RunnerPath "$scripts/windows_native.ps1" -OldProfilePath "$skillRoot/assets/build-profiles/quantum1-v2126.json"
+          & ./tests/native_inventory_definition_tests.ps1 -SkillRoot "$skillRoot" -ProfileModulePath "$scripts/native_profile.ps1" -InventoryModulePath "$scripts/native_inventory.ps1"
+          & ./tests/native_lease_tests.ps1 -LeaseModulePath "$scripts/native_lease.ps1"

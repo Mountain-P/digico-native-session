@@ -1,6 +1,8 @@
 """Pure adapters for version-bound Preset requests; no process or network I/O."""
 from __future__ import annotations
 
+from build_profiles import build_value, profile_bound
+
 import math
 import re
 import struct
@@ -62,6 +64,7 @@ def is_preset_request(request):
                     for op in request['operations']))
 
 
+@profile_bound(feature='presets', documents=('document',), error_type=PresetAdapterError)
 def normalize_presets(document):
     if not isinstance(document, dict):
         raise PresetAdapterError('--presets requires a native presets result')
@@ -72,7 +75,7 @@ def normalize_presets(document):
         state = document
     if document.get('status', 'ok') != 'ok':
         raise PresetAdapterError('presets result did not finish successfully')
-    if document.get('executable_sha256', state.get('executable_sha256')) != TARGET_SHA256:
+    if document.get('executable_sha256', state.get('executable_sha256')) != build_value('executable.sha256'):
         raise PresetAdapterError('presets executable hash differs from exact V2126')
     if type(state.get('schema_version')) is not int or state['schema_version'] != 1 or state.get('subsystem') != 'native-presets-readonly':
         raise PresetAdapterError('unsupported native presets schema')
@@ -132,8 +135,8 @@ def _controls(document, ids, channel_id, session_path_hex):
         row = item['source']
         contract = {'control_pointer': _int(row.get('pointer'),1,0xFFFFFFFF,'controller pointer'),
                     'owner_module_pointer': _int(row.get('owner_module_pointer'),1,0xFFFFFFFF,'module pointer'),
-                    'module_vmt_rva': _int(item.get('module_vmt_rva'),1,0x443FFFF,'module VMT RVA'),
-                    'process_output_rva': _int(item.get('process_output_rva'),1,0x443FFFF,'callback RVA'),
+                    'module_vmt_rva': _int(item.get('module_vmt_rva'),1,build_value('executable.image_size')-1,'module VMT RVA'),
+                    'process_output_rva': _int(item.get('process_output_rva'),1,build_value('executable.image_size')-1,'callback RVA'),
                     'definition_raw_hex': item['definition']['raw_hex'],
                     'raw_type': item['raw_type']}
         result.append({'id': key, 'control_contract': contract,
@@ -173,6 +176,7 @@ def _stored_expectations(entry, checks, selected_scope):
         check.update(expected_raw_hex=value, source_control_id_hex=wanted)
 
 
+@profile_bound(feature='presets', documents=('request', 'presets', 'inventory'), error_type=PresetAdapterError)
 def compile_preset_request(request, *, presets, inventory=None):
     """Compile one high-level operation; callers retain explicit --send boundary."""
     try:
@@ -182,7 +186,7 @@ def compile_preset_request(request, *, presets, inventory=None):
 
 
 def _compile(request, document, inventory):
-    _fields(request, ('schema_version','fps','encoding','expected_count','operations'))
+    _fields(request, ('schema_version','fps','encoding','expected_count','operations'), ('build_profile','executable_sha256'))
     if type(request['schema_version']) is not int or request['schema_version'] != 1 or type(request['fps']) is not int or request['fps'] != 25:
         raise PresetAdapterError('Preset adapter requires schema1 and25fps')
     if request['encoding'] not in ('ascii','cp950'):
@@ -210,7 +214,7 @@ def _compile(request, document, inventory):
             raise PresetAdapterError('set_scope requires exactly one of scopes or copied scope_hex')
         selected_scope = scope_bytes(op['scopes']) if 'scopes' in op else bytes.fromhex(_hex(op['scope_hex'],32,'scope_hex'))
         step = _step('set_preset_recall_scope',2,0xD3,0,struct.pack('<I',32)+selected_scope,
-                     '0xB7605C',expected_scope_hex=selected_scope.hex())
+                     ('0x%X' % build_value('addresses.hex_b7605c')),expected_scope_hex=selected_scope.hex())
         plan = {'steps':[step], 'final_expected_preset_count':count}
     else:
         common = ('op','index','group_name')

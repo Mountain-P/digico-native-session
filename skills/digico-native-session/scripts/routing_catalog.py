@@ -8,37 +8,20 @@ are not runtime or audio validation and do not authorize arbitrary integers.
 """
 from __future__ import annotations
 
+from build_profiles import build_value, profile_bound
+
 import hashlib
 import json
 import re
 import struct
 
-TARGET_SHA256 = '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
-INPUT_VMT_RVA = 0x81AA44
-INPUT_CALLBACK_RVA = 0x826848
-SOURCE_DEFINITION_RVA = 0x8D16C0
-INPUT_SOCKET_VMT_RVA = 0x759440
-OUTPUT_SOCKET_VMT_RVA = 0x75A0E0
-SOURCE_PROFILES = {
-    'main': {'module': 1, 'parameter': 0, 'band': 0, 'class': 'tInputModule',
-             'vmt': INPUT_VMT_RVA, 'callback': INPUT_CALLBACK_RVA,
-             'definition': SOURCE_DEFINITION_RVA, 'slot': 0x54, 'field': 'input_route'},
-    'alt': {'module': 1, 'parameter': 0, 'band': 1, 'class': 'tInputModule',
-            'vmt': INPUT_VMT_RVA, 'callback': INPUT_CALLBACK_RVA,
-            'definition': 0x8D1BF0, 'slot': 0x58, 'field': 'alt_input_route'},
-    'key': {'module': 5, 'parameter': 0x16, 'band': 0, 'owner_band': 1,
-            'class': 'tGateModule', 'vmt': 0x81C8C0, 'callback': 0x82D3DC,
-            'definition': 0x8D5A0D, 'slot': 0x64, 'field': 'key_route'},
-    'mustard_key': {'module': 0x1E, 'parameter': 0x16, 'band': 0,
-                    'class': 'tTidalGateModule', 'vmt': 0x75FA28, 'callback': 0x762288,
-                    'definition': 0x8D5A0D, 'slot': 0x5C, 'field': None},
-    'insert_return': {'module': 8, 'parameter': 0, 'band': 0, 'definition_band': 0,
-                      'class': 'tInsertModule', 'vmt': 0x81B570, 'callback': 0x828C68,
-                      'definition': 0x8D2D1B, 'slot': 0x5C, 'field': None},
-    'insert_send': {'module': 8, 'parameter': 0xFE, 'band': 0, 'definition_band': 0,
-                    'class': 'tInsertModule', 'vmt': 0x81B570, 'callback': 0x828C68,
-                    'definition': 0x8D2CE1, 'slot': 0x58, 'field': None, 'direction': 'output'},
-}
+TARGET_SHA256 = build_value('executable.sha256')
+INPUT_VMT_RVA = build_value('addresses.hex_81aa44')
+INPUT_CALLBACK_RVA = build_value('addresses.hex_826848')
+SOURCE_DEFINITION_RVA = build_value('addresses.hex_8d16c0')
+INPUT_SOCKET_VMT_RVA = build_value('addresses.hex_759440')
+OUTPUT_SOCKET_VMT_RVA = build_value('addresses.hex_75a0e0')
+SOURCE_PROFILES = build_value('routing.source_profiles')
 
 
 class RoutingError(ValueError):
@@ -81,7 +64,7 @@ def _inventory(value):
             raise RoutingError('require successful read-only inventory envelope')
         value = value['inventory']
     if (not isinstance(value, dict) or value.get('schema_version') != 1
-            or value.get('executable_sha256') != TARGET_SHA256
+            or value.get('executable_sha256') != build_value('executable.sha256')
             or value.get('memory_read_only') is not True
             or value.get('structure_verified') is not True
             or value.get('io_inventory_complete') is not True):
@@ -89,6 +72,7 @@ def _inventory(value):
     return value
 
 
+@profile_bound(feature='routes', documents=('inventory',), error_type=RoutingError)
 def build_routing_catalog(inventory, direction='input'):
     """Return a domain of fitted physical sources, never a generic int32 range.
 
@@ -151,7 +135,7 @@ def build_routing_catalog(inventory, direction='input'):
             continue
         pointer = _integer(channel.get('pointer'), 'source channel pointer', 1)
         expected_class = 'tInputSocketModule' if input_direction else 'tOutputSocketModule'
-        expected_vmt = INPUT_SOCKET_VMT_RVA if input_direction else OUTPUT_SOCKET_VMT_RVA
+        expected_vmt = build_value('addresses.hex_759440') if input_direction else build_value('addresses.hex_75a0e0')
         owners = [m for m in modules if m.get('parent_pointer') == pointer
                   and m.get('class_name') == expected_class and m.get('vmt_rva') == expected_vmt]
         if len(owners) != 1 or owners[0].get('n_signals') != 1:
@@ -199,7 +183,7 @@ def build_routing_catalog(inventory, direction='input'):
         raise RoutingError('more than one native source resolves to the same port/socket')
     digest = hashlib.sha256(json.dumps(inv, sort_keys=True, separators=(',', ':'),
         ensure_ascii=True, allow_nan=False).encode()).hexdigest()
-    result = {'schema_version': 1, 'executable_sha256': TARGET_SHA256,
+    result = {'schema_version': 1, 'executable_sha256': build_value('executable.sha256'),
         'inventory_sha256': digest, 'scope': 'configured-physical-'+direction+'-sockets',
         'sources': sorted(sources, key=lambda x: (x['port_type'], x['port_number'], x['socket_index'])),
         'runtime_acceptance_verified': False}
@@ -208,6 +192,7 @@ def build_routing_catalog(inventory, direction='input'):
     return result
 
 
+@profile_bound(feature='routes', documents=('inventory',), error_type=RoutingError)
 def plan_set_input_route(inventory, destination_channel_id, source, route_kind='main', insert_index=0):
     """Plan one mono Input source/key/insert route; None disconnects that route.
 
@@ -217,10 +202,10 @@ def plan_set_input_route(inventory, destination_channel_id, source, route_kind='
     previous value; success requires both controller+2C and channel+B2 readback.
     """
     inv = _inventory(inventory)
-    if not isinstance(route_kind, str) or route_kind not in SOURCE_PROFILES:
+    if not isinstance(route_kind, str) or route_kind not in build_value('routing.source_profiles'):
         raise RoutingError('unsupported semantic input route_kind')
     insert_index = _integer(insert_index, 'insert_index', 0, 1)
-    profile = dict(SOURCE_PROFILES[route_kind])
+    profile = dict(build_value('routing.source_profiles')[route_kind])
     if route_kind.startswith('insert_'):
         profile['band'] = insert_index;profile['owner_band'] = insert_index
     elif insert_index != 0:
@@ -246,7 +231,7 @@ def plan_set_input_route(inventory, destination_channel_id, source, route_kind='
     if len(controls) != 1:
         raise RoutingError('native main source-route controller must be unique')
     control = controls[0]
-    definition = _raw(control.get('definition_raw_hex'), 58, 'source-route definition')
+    definition = _raw(control.get('definition_raw_hex'), build_value('layouts.definition.size'), 'source-route definition')
     if (definition[0], definition[5], definition[6]) != (2, profile.get('definition_band', profile['band']), profile['parameter']):
         raise RoutingError('source-route definition datatype/band/parameter mismatch')
     if (control.get('definition_rva') != profile['definition']
@@ -342,6 +327,7 @@ def _output_sockets(channel):
     return sorted(result)
 
 
+@profile_bound(feature='routes', documents=('inventory',), error_type=RoutingError)
 def plan_set_output_route(inventory, channel_id, destination, connected):
     """Plan one incremental mono Input direct-output connection/disconnection.
 
@@ -367,7 +353,7 @@ def plan_set_output_route(inventory, channel_id, destination, connected):
     channel = channels[0]
     modules = [x for x in _rows(inv.get('modules'), 'modules', 65536)
         if x.get('parent_pointer') == channel.get('pointer') and x.get('class_name') == 'tOutputModule'
-        and x.get('vmt_rva') == 0x81a3cc and x.get('n_signals') == 1]
+        and x.get('vmt_rva') == build_value('addresses.hex_81a3cc') and x.get('n_signals') == 1]
     if len(modules) != 1:
         raise RoutingError('output module code/owner binding is unavailable')
     owner = modules[0]
@@ -377,11 +363,11 @@ def plan_set_output_route(inventory, channel_id, destination, connected):
     if len(matches) != 1:
         raise RoutingError('output route controller must be unique')
     control = matches[0]
-    raw = _raw(control.get('definition_raw_hex'), 58, 'output definition')
+    raw = _raw(control.get('definition_raw_hex'), build_value('layouts.definition.size'), 'output definition')
     if ((raw[0], raw[5], raw[6]) != (2, 0, 0xfe)
-            or control.get('definition_rva') != 0x8d738f
-            or control.get('module_vmt_rva') != 0x81a3cc
-            or control.get('process_output_rva') != 0x824f9c
+            or control.get('definition_rva') != build_value('addresses.hex_8d738f')
+            or control.get('module_vmt_rva') != build_value('addresses.hex_81a3cc')
+            or control.get('process_output_rva') != build_value('addresses.hex_824f9c')
             or control.get('owner_module_pointer') != owner.get('pointer')
             or control.get('module_id_hex') != owner.get('raw_id_hex')
             or control.get('definition_binding_verified') is not True):
@@ -407,8 +393,8 @@ def plan_set_output_route(inventory, channel_id, destination, connected):
         'payload_hex': payload, 'value': signed_command, 'tolerance': 0.0,
         'expected': struct.unpack('<i', old_raw)[0], 'expected_payload_hex': old_raw.hex(),
         'control_pointer': control.get('pointer'), 'owner_module_pointer': owner.get('pointer'),
-        'module_vmt_rva': 0x81a3cc, 'process_output_rva': 0x824f9c,
-        'definition_pointer': control.get('definition_pointer'), 'definition_rva': 0x8d738f,
+        'module_vmt_rva': build_value('addresses.hex_81a3cc'), 'process_output_rva': build_value('addresses.hex_824f9c'),
+        'definition_pointer': control.get('definition_pointer'), 'definition_rva': build_value('addresses.hex_8d738f'),
         'definition_raw_hex': raw.hex(), 'module_id_hex': owner.get('raw_id_hex'),
         'allowed_values': [signed_command], 'range': None, 'response': None, 'response_lut': None,
         'value_domain_source': 'native_incremental_output_route',
@@ -425,6 +411,7 @@ def plan_set_output_route(inventory, channel_id, destination, connected):
 plan_output_route = plan_set_output_route
 
 
+@profile_bound(feature='routes', documents=('step', 'inventory'), error_type=RoutingError)
 def verify_output_route_postcondition(step, inventory):
     """Reconcile a sent output command using a new, independently read inventory.
 
@@ -443,8 +430,8 @@ def verify_output_route_postcondition(step, inventory):
         raise RoutingError('output command identity changed before reconciliation')
     control = controls[0]
     if (control.get('owner_module_pointer') != contract.get('owner_module_pointer')
-            or control.get('module_vmt_rva') != 0x81a3cc
-            or control.get('process_output_rva') != 0x824f9c
+            or control.get('module_vmt_rva') != build_value('addresses.hex_81a3cc')
+            or control.get('process_output_rva') != build_value('addresses.hex_824f9c')
             or control.get('definition_raw_hex') != contract.get('definition_raw_hex')):
         raise RoutingError('output command code/owner/definition changed')
     want = _raw(contract.get('payload_hex'), 4, 'output command payload').hex()
@@ -468,6 +455,7 @@ def verify_output_route_postcondition(step, inventory):
         'replayed': False, 'audio_delivery_verified': False}
 
 
+@profile_bound(feature='routes', documents=('inventory',), error_type=RoutingError)
 def plan_group_assignment(inventory, channel_id, group_channel_id, enabled):
     """Plan one GroupSend Param09 float32 toggle plus one BussRoutes bit.
 
@@ -490,10 +478,10 @@ def plan_group_assignment(inventory, channel_id, group_channel_id, enabled):
         raise RoutingError('group assignment currently supports mono/stereo Group outputs only')
     modules = _rows(inv.get('modules'), 'modules', 65536)
     owners = [x for x in modules if x.get('parent_pointer') == channel.get('pointer')
-        and x.get('class_name') == 'tGroupSendModule' and x.get('vmt_rva') == 0x81d950
+        and x.get('class_name') == 'tGroupSendModule' and x.get('vmt_rva') == build_value('addresses.hex_81d950')
         and x.get('n_signals') == 1 and x.get('raw_id_hex') == bytes((0, 3, 0, channel_id & 255, 1)).hex()]
     faders = [x for x in modules if x.get('parent_pointer') == group.get('pointer')
-        and x.get('class_name') == 'tFaderModule' and x.get('vmt_rva') == 0x81e510
+        and x.get('class_name') == 'tFaderModule' and x.get('vmt_rva') == build_value('addresses.hex_81e510')
         and x.get('n_signals') == target_mode]
     if len(owners) != 1 or len(faders) != 1:
         raise RoutingError('source GroupSend or target Group Fader code/owner binding is unavailable')
@@ -507,10 +495,10 @@ def plan_group_assignment(inventory, channel_id, group_channel_id, enabled):
     if len(controls) != 1:
         raise RoutingError('group assignment controller must exist exactly once')
     control = controls[0]
-    definition = _raw(control.get('definition_raw_hex'), 58, 'group definition')
+    definition = _raw(control.get('definition_raw_hex'), build_value('layouts.definition.size'), 'group definition')
     if ((definition[0], definition[5], definition[6]) != (0, index, 9)
-            or control.get('module_vmt_rva') != 0x81d950
-            or control.get('process_output_rva') != 0x83042c
+            or control.get('module_vmt_rva') != build_value('addresses.hex_81d950')
+            or control.get('process_output_rva') != build_value('addresses.hex_83042c')
             or control.get('owner_module_pointer') != owner.get('pointer')
             or control.get('module_id_hex') != owner.get('raw_id_hex')
             or control.get('definition_binding_verified') is not True):
@@ -536,7 +524,7 @@ def plan_group_assignment(inventory, channel_id, group_channel_id, enabled):
         'payload_hex': payload, 'value': int(enabled), 'tolerance': 0.0,
         'expected': int(bit_set), 'expected_payload_hex': current.hex(),
         'control_pointer': control.get('pointer'), 'owner_module_pointer': owner.get('pointer'),
-        'module_vmt_rva': 0x81d950, 'process_output_rva': 0x83042c,
+        'module_vmt_rva': build_value('addresses.hex_81d950'), 'process_output_rva': build_value('addresses.hex_83042c'),
         'definition_pointer': control.get('definition_pointer'), 'definition_rva': control.get('definition_rva'),
         'definition_raw_hex': definition.hex(), 'module_id_hex': owner.get('raw_id_hex'),
         'allowed_values': [0, 1], 'range': None, 'response': None, 'response_lut': None,
@@ -547,7 +535,7 @@ def plan_group_assignment(inventory, channel_id, group_channel_id, enabled):
         'group_contract': {'source_channel_pointer': channel.get('pointer'),
             'target_channel_pointer': group.get('pointer'), 'target_stereo_mode': target_mode,
             'target_buss_id': group.get('buss_id'), 'target_fader_pointer': fader.get('pointer'),
-            'target_fader_vmt_rva': 0x81e510, 'target_fader_id_hex': fader_id.hex(),
+            'target_fader_vmt_rva': build_value('addresses.hex_81e510'), 'target_fader_id_hex': fader_id.hex(),
             'target_n_signals': target_mode, 'bit_index': index,
             'expected_buss_routes_hex': before.hex(), 'post_buss_routes_hex': after.hex()},
         'runtime_acceptance_verified': False, 'audio_delivery_verified': False}

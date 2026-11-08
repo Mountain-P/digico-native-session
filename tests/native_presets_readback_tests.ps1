@@ -2,7 +2,10 @@
 [CmdletBinding()]
 param([string]$PresetModulePath='')
 $ErrorActionPreference='Stop'
-if(-not $PresetModulePath){$PresetModulePath=Join-Path $PSScriptRoot '..\skill\digico-native-session\scripts\native_presets.ps1'}
+if(-not $PresetModulePath){$PresetModulePath=Join-Path $PSScriptRoot '..\skills\digico-native-session\scripts\native_presets.ps1'}
+$SkillRoot=Split-Path (Split-Path $PresetModulePath -Parent) -Parent
+. (Join-Path $SkillRoot 'scripts\native_profile.ps1')
+$null=Set-NativeBuildProfile -ExecutableSha256 '535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d'
 . $PresetModulePath
 function Assert-PresetTest([bool]$Condition,[string]$Message){if(-not $Condition){throw $Message}}
 function Assert-PresetThrows([scriptblock]$Action,[string]$Message){$failed=$false;try{& $Action|Out-Null}catch{$failed=$true};Assert-PresetTest $failed $Message}
@@ -73,7 +76,7 @@ Set-PresetU32 0x3000 0
 Assert-PresetThrows {Read-DiGiCoNativePresets} 'Wrong preset VMT accepted.'
 Set-PresetU32 0x3000 0x77315C
 
-$rename=[pscustomobject]@{op='rename_preset';category=3;control_id_hex='ce0000b601';list_index=0;body_hex='010000004e';name_hex='4e'}
+$rename=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';op='rename_preset';category=3;control_id_hex='ce0000b601';list_index=0;body_hex='010000004e';name_hex='4e'}
 $expected=Assert-DiGiCoPresetEdit $before $rename
 Set-PresetShort 0x3024 'N'
 $verified=Wait-DiGiCoPresetEdit $before $rename $expected -TimeoutMs 500
@@ -87,11 +90,11 @@ Assert-PresetThrows {Assert-DiGiCoPresetEdit (Read-DiGiCoNativePresets) $rename}
 $reader.Bytes[0x316C]=0
 
 $before=Read-DiGiCoNativePresets
-$lock=[pscustomobject]@{op='lock_preset';category=1;control_id_hex='d20000b601';list_index=0;body_hex='01000000';expected_lock_flag=1}
+$lock=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';op='lock_preset';category=1;control_id_hex='d20000b601';list_index=0;body_hex='01000000';expected_lock_flag=1}
 $expected=Assert-DiGiCoPresetEdit $before $lock;$reader.Bytes[0x316C]=1
 $verified=Wait-DiGiCoPresetEdit $before $lock $expected -TimeoutMs 500
 Assert-PresetTest ($verified.state.presets[0].lock_flag-eq 1) 'Lock change was not verified.'
-$update=[pscustomobject]@{op='update_input_preset';category=1;control_id_hex='cc0000b601';list_index=0;body_hex='00010000';expected_controller_values=@([pscustomobject]@{control_id_hex='210c000001';value_raw_hex='0000003f'})}
+$update=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';op='update_input_preset';category=1;control_id_hex='cc0000b601';list_index=0;body_hex='00010000';expected_controller_values=@([pscustomobject]@{control_id_hex='210c000001';value_raw_hex='0000003f'})}
 Assert-PresetThrows {Assert-DiGiCoPresetEdit (Read-DiGiCoNativePresets) $update} 'Locked preset update accepted.'
 $reader.Bytes[0x316C]=0;$before=Read-DiGiCoNativePresets
 $expected=Assert-DiGiCoPresetEdit $before $update
@@ -101,19 +104,19 @@ Assert-PresetTest $verified.stored_controller_subset_verified 'Preset update did
 
 $before=Read-DiGiCoNativePresets
 $scopeHex='10'+('00'*31)
-$scope=[pscustomobject]@{op='set_preset_recall_scope';category=2;control_id_hex='d30000b601';list_index=0;body_hex=('20000000'+$scopeHex);expected_scope_hex=$scopeHex}
+$scope=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';op='set_preset_recall_scope';category=2;control_id_hex='d30000b601';list_index=0;body_hex=('20000000'+$scopeHex);expected_scope_hex=$scopeHex}
 $expected=Assert-DiGiCoPresetEdit $before $scope;$reader.Bytes[0x126E3EC]=0x10
 $verified=Wait-DiGiCoPresetEdit $before $scope $expected -TimeoutMs 500
 Assert-PresetTest ($verified.state.scope_hex-eq $scopeHex) 'Exact32-byte scope was not verified.'
 $before=Read-DiGiCoNativePresets
-$recall=[pscustomobject]@{op='recall_input_preset';category=1;control_id_hex='c80000b601';list_index=0;body_hex='00010000';target_channel_id=0x100}
+$recall=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';op='recall_input_preset';category=1;control_id_hex='c80000b601';list_index=0;body_hex='00010000';target_channel_id=0x100}
 Assert-PresetThrows {Assert-DiGiCoPresetEdit $before $recall} 'Recall accepted without actual processing verifier.'
 $check={param($Old,$Now,$Step,$Expected) return $Now.presets[0].content.channels[0].modules[0].controllers[0].value_raw_hex-eq '0000003f'}
 $expected=Assert-DiGiCoPresetEdit $before $recall -ProcessingCheck $check
 $verified=Wait-DiGiCoPresetEdit $before $recall $expected -ProcessingCheck $check -TimeoutMs 500
 Assert-PresetTest $verified.processing_verified 'Recall processing callback was not required/run.'
 
-$delete=[pscustomobject]@{op='delete_preset';category=1;control_id_hex='d10000b601';list_index=0;body_hex='00000000';expected_group_name_hex=([Text.Encoding]::ASCII.GetBytes('Synthetic Lab')|ForEach-Object {$_.ToString('x2')})-join ''}
+$delete=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';op='delete_preset';category=1;control_id_hex='d10000b601';list_index=0;body_hex='00000000';expected_group_name_hex=([Text.Encoding]::ASCII.GetBytes('Synthetic Lab')|ForEach-Object {$_.ToString('x2')})-join ''}
 $null=Assert-DiGiCoPresetEdit $before $delete
 Set-PresetU32 0x19046 0x3000
 Assert-PresetThrows {Assert-DiGiCoPresetEdit $before $delete} 'Cue-dependent preset delete accepted.'
@@ -121,7 +124,7 @@ Set-PresetU32 0x19046 0
 $wrong=$delete.PSObject.Copy();$wrong.expected_group_name_hex=''
 Assert-PresetThrows {Assert-DiGiCoPresetEdit $before $wrong} 'Delete without explicit lab group accepted.'
 
-$store=[pscustomobject]@{op='store_input_preset';category=3;control_id_hex='c90000b601';list_index=0x100;body_hex='0d00000053796e746865746963204c6162';group_name_hex='53796e746865746963204c6162'}
+$store=[pscustomobject]@{build_profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';op='store_input_preset';category=3;control_id_hex='c90000b601';list_index=0x100;body_hex='0d00000053796e746865746963204c6162';group_name_hex='53796e746865746963204c6162'}
 $before=Read-DiGiCoNativePresets;$expected=Assert-DiGiCoPresetEdit $before $store
 Set-SyntheticPreset 0x4000 'Input One';Set-PresetList 0x2000 0x7735B8 0x2100 @(0x3000,0x4000)
 $verified=Wait-DiGiCoPresetEdit $before $store $expected -TimeoutMs 500

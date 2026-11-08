@@ -3,9 +3,11 @@ import copy
 import importlib.util
 from pathlib import Path
 import struct
+import sys
 import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'skills/digico-native-session/scripts'))
 spec=importlib.util.spec_from_file_location('meter_catalog',ROOT/'skills/digico-native-session/scripts/meter_catalog.py')
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 

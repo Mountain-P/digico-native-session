@@ -1,0 +1,875 @@
+{
+  "schema_version": 1,
+  "id": "quantum1-v2126",
+  "family": "Quantum",
+  "model": "Quantum1",
+  "release": 2126,
+  "implementation": "quantum1-v2126-layout-v1",
+  "executable": {
+    "name": "Quantum1.exe",
+    "sha256": "535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d",
+    "pointer_size": 4,
+    "preferred_image_base": 4194304,
+    "image_size": 71565312
+  },
+  "validation": {
+    "stage": "offline_runtime_verified",
+    "offline_runtime_verified": true,
+    "physical_console_verified": false,
+    "coverage": "Selected offline native operations and read-only full inventory; writable candidates are not all runtime tested."
+  },
+  "transport": {
+    "host": "127.0.0.1",
+    "tcp_port": 2028,
+    "udp_discovery_port": 2029,
+    "protocol_version": 2126,
+    "allowed_fps": [
+      25
+    ],
+    "status_tcp_port": 2029
+  },
+  "features": {
+    "inventory": true,
+    "control_write": true,
+    "routes": true,
+    "meters": true,
+    "presets": true,
+    "structure": true,
+    "transfer": true,
+    "snapshots": true,
+    "template": true,
+    "session_files": true,
+    "inspect": true,
+    "status": true
+  },
+  "runtime": {
+    "console_global_rva": 19373308,
+    "snapshot_list_global_rva": 19345500,
+    "session_path_rva": 19379452,
+    "fps_rva": 19377456,
+    "network_manager_global_rva": 19326576,
+    "native_peer_active_rva": 19377518,
+    "session_load_result_rva": 10650976,
+    "save_worker_global_rva": 10650768,
+    "protocol_version_rva": 19374424,
+    "identity_name_rva": 19377564,
+    "snapshot_list_vmt_rva": 8362928,
+    "snapshot_vmt_rva": 8356232,
+    "save_worker_vmt_rva": 5460024
+  },
+  "addresses": {
+    "hex_126e368": 19325800,
+    "hex_126e3e8": 19325928,
+    "hex_126e3ec": 19325932,
+    "hex_126e670": 19326576,
+    "hex_127305c": 19345500,
+    "hex_1279cfc": 19373308,
+    "hex_127a158": 19374424,
+    "hex_127a17c": 19374460,
+    "hex_127ad30": 19377456,
+    "hex_127ad6e": 19377518,
+    "hex_127ad9c": 19377564,
+    "hex_127b4fc": 19379452,
+    "hex_2f7c58": 3112024,
+    "hex_2f85bc": 3114428,
+    "hex_2f977c": 3118972,
+    "hex_4440000": 71565312,
+    "hex_47660": 292448,
+    "hex_535038": 5460024,
+    "hex_7544a4": 7685284,
+    "hex_759440": 7705664,
+    "hex_75a0e0": 7708896,
+    "hex_75c964": 7719268,
+    "hex_75fa28": 7731752,
+    "hex_762288": 7742088,
+    "hex_77315c": 7811420,
+    "hex_7735b8": 7812536,
+    "hex_7f7938": 8354104,
+    "hex_7f8188": 8356232,
+    "hex_7f90a0": 8360096,
+    "hex_7f9bb0": 8362928,
+    "hex_81a3cc": 8496076,
+    "hex_81aa44": 8497732,
+    "hex_81b2f4": 8499956,
+    "hex_81b570": 8500592,
+    "hex_81bd7c": 8502652,
+    "hex_81c240": 8503872,
+    "hex_81c8c0": 8505536,
+    "hex_81d950": 8509776,
+    "hex_81e510": 8512784,
+    "hex_824f9c": 8540060,
+    "hex_826848": 8546376,
+    "hex_828640": 8554048,
+    "hex_828c68": 8555624,
+    "hex_82a938": 8563000,
+    "hex_82bac0": 8567488,
+    "hex_82d3dc": 8573916,
+    "hex_83042c": 8586284,
+    "hex_8645d4": 8799700,
+    "hex_864808": 8800264,
+    "hex_86600c": 8806412,
+    "hex_86660c": 8807948,
+    "hex_867a2c": 8813100,
+    "hex_8680fc": 8814844,
+    "hex_8aae5c": 9088604,
+    "hex_8d16c0": 9246400,
+    "hex_8d1bf0": 9247728,
+    "hex_8d2ce1": 9252065,
+    "hex_8d2d1b": 9252123,
+    "hex_8d5a0d": 9263629,
+    "hex_8d738f": 9270159,
+    "hex_8e8e9c": 9342620,
+    "hex_8e92a8": 9343656,
+    "hex_8e9980": 9345408,
+    "hex_911110": 9507088,
+    "hex_911114": 9507092,
+    "hex_913a2c": 9517612,
+    "hex_913a30": 9517616,
+    "hex_a2443c": 10634300,
+    "hex_a24440": 10634304,
+    "hex_a28490": 10650768,
+    "hex_a28560": 10650976,
+    "hex_b753bc": 12014524,
+    "hex_b7569c": 12015260,
+    "hex_b757f8": 12015608,
+    "hex_b7594c": 12015948,
+    "hex_b75da4": 12017060,
+    "hex_b75f50": 12017488,
+    "hex_b7605c": 12017756,
+    "hex_c6a1bf": 13017535,
+    "hex_c6a290": 13017744,
+    "hex_c6a362": 13017954
+  },
+  "semantic_profiles": {
+    "compressor_v2126": "compressor_v2126",
+    "gate_v2126": "gate_v2126",
+    "eq_q_v2126": "eq_q_v2126",
+    "delay_v2126": "delay_v2126"
+  },
+  "routing": {
+    "source_profiles": {
+      "main": {
+        "module": 1,
+        "parameter": 0,
+        "band": 0,
+        "class": "tInputModule",
+        "vmt": 8497732,
+        "callback": 8546376,
+        "definition": 9246400,
+        "slot": 84,
+        "field": "input_route"
+      },
+      "alt": {
+        "module": 1,
+        "parameter": 0,
+        "band": 1,
+        "class": "tInputModule",
+        "vmt": 8497732,
+        "callback": 8546376,
+        "definition": 9247728,
+        "slot": 88,
+        "field": "alt_input_route"
+      },
+      "key": {
+        "module": 5,
+        "parameter": 22,
+        "band": 0,
+        "owner_band": 1,
+        "class": "tGateModule",
+        "vmt": 8505536,
+        "callback": 8573916,
+        "definition": 9263629,
+        "slot": 100,
+        "field": "key_route"
+      },
+      "mustard_key": {
+        "module": 30,
+        "parameter": 22,
+        "band": 0,
+        "class": "tTidalGateModule",
+        "vmt": 7731752,
+        "callback": 7742088,
+        "definition": 9263629,
+        "slot": 92,
+        "field": null
+      },
+      "insert_return": {
+        "module": 8,
+        "parameter": 0,
+        "band": 0,
+        "definition_band": 0,
+        "class": "tInsertModule",
+        "vmt": 8500592,
+        "callback": 8555624,
+        "definition": 9252123,
+        "slot": 92,
+        "field": null
+      },
+      "insert_send": {
+        "module": 8,
+        "parameter": 254,
+        "band": 0,
+        "definition_band": 0,
+        "class": "tInsertModule",
+        "vmt": 8500592,
+        "callback": 8555624,
+        "definition": 9252065,
+        "slot": 88,
+        "field": null,
+        "direction": "output"
+      }
+    },
+    "output_profile": {
+      "module": 14,
+      "parameter": 254,
+      "band": 0,
+      "class": "tOutputModule",
+      "vmt": 8496076,
+      "callback": 8540060,
+      "definition": 9270159,
+      "slot": 80,
+      "field": null,
+      "direction": "output"
+    }
+  },
+  "control_enums": {
+    "258": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "282": [
+      1,
+      2
+    ],
+    "480": [
+      0,
+      1,
+      2
+    ],
+    "516": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "523": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "1291": [
+      0,
+      1,
+      2
+    ],
+    "1295": [
+      0,
+      1,
+      2
+    ],
+    "1338": [
+      0,
+      1,
+      2
+    ],
+    "2273": [
+      0,
+      2,
+      3,
+      4,
+      5
+    ],
+    "2818": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "2842": [
+      1,
+      2,
+      3,
+      4,
+      6
+    ],
+    "2872": [
+      0,
+      1,
+      2
+    ],
+    "3083": [
+      0,
+      1,
+      2
+    ],
+    "3089": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "3646": [
+      0,
+      1,
+      2
+    ],
+    "4121": [
+      0,
+      1,
+      2
+    ],
+    "5462": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "5890": [
+      1,
+      2,
+      3,
+      4,
+      6
+    ],
+    "6146": [
+      1,
+      2,
+      3,
+      4,
+      6
+    ],
+    "6713": [
+      0,
+      1,
+      2
+    ],
+    "6725": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "6881": [
+      0,
+      2,
+      3,
+      4,
+      5
+    ],
+    "7435": [
+      0,
+      3,
+      4,
+      5
+    ],
+    "7496": [
+      0,
+      1,
+      2
+    ],
+    "7497": [
+      0,
+      1,
+      2
+    ],
+    "7498": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "7691": [
+      0,
+      1,
+      2
+    ],
+    "7756": [
+      0,
+      1,
+      2
+    ]
+  },
+  "presets": {
+    "group": 438,
+    "scope_bits": {
+      "input": [
+        1,
+        9,
+        11
+      ],
+      "input_gain": [
+        17
+      ],
+      "input_route": [
+        128
+      ],
+      "eq": [
+        4,
+        7
+      ],
+      "dynamics": [
+        5
+      ],
+      "aux": [
+        2,
+        6
+      ],
+      "group": [
+        3,
+        12,
+        13
+      ],
+      "tidal_preamp": [
+        26
+      ],
+      "tidal_eq": [
+        27,
+        28
+      ],
+      "tidal_comp": [
+        29
+      ],
+      "tidal_gate": [
+        30
+      ]
+    }
+  },
+  "unit_contracts": {
+    "210c": {
+      "native_unit": "dB",
+      "raw_type": 1,
+      "module_vmt_rva": 8512784,
+      "process_output_rva": 8594452,
+      "curve_type": 1,
+      "unit_descriptor_raw_hex": "02644200000000000000000000000000000000000000000000000000000000",
+      "minimum": -150,
+      "maximum": 10,
+      "evidence": [
+        "nativeSeedUnits",
+        "typedRuntimePersistence"
+      ],
+      "physical_audio_verified": false
+    },
+    "0101": {
+      "native_unit": "dB",
+      "raw_type": 1,
+      "module_vmt_rva": 8497732,
+      "process_output_rva": 8546376,
+      "curve_type": 1,
+      "unit_descriptor_raw_hex": "02644200000000000000000000000000000000000000000000000000000000",
+      "minimum": -40,
+      "maximum": 60,
+      "evidence": [
+        "nativeSeedUnits",
+        "typedRuntimePersistence"
+      ],
+      "physical_audio_verified": false
+    },
+    "0704": {
+      "native_unit": "dB",
+      "raw_type": 1,
+      "module_vmt_rva": 8502652,
+      "process_output_rva": 8563000,
+      "curve_type": 1,
+      "unit_descriptor_raw_hex": "02644200000000000000000000000000000000000000000000000000000000",
+      "minimum": -18,
+      "maximum": 18,
+      "evidence": [
+        "nativeSeedUnits",
+        "typedRuntimePersistence"
+      ],
+      "physical_audio_verified": false
+    },
+    "0504": {
+      "native_unit": "Hz",
+      "raw_type": 1,
+      "module_vmt_rva": 8502652,
+      "process_output_rva": 8563000,
+      "curve_type": 6,
+      "unit_descriptor_raw_hex": "1500000000006b487a00487a00000000000000000000000000000000000000",
+      "minimum": 20,
+      "maximum": 20000,
+      "evidence": [
+        "nativeSeedUnits",
+        "typedRuntimePersistence"
+      ],
+      "physical_audio_verified": false
+    },
+    "0507": {
+      "native_unit": "Hz",
+      "raw_type": 1,
+      "module_vmt_rva": 8502124,
+      "process_output_rva": 8561344,
+      "curve_type": 6,
+      "unit_descriptor_raw_hex": "1500000000006b487a00487a00000000000000000000000000000000000000",
+      "minimum": 25,
+      "maximum": 25000,
+      "evidence": [
+        "nativeSeedUnits",
+        "typedRuntimePersistence"
+      ],
+      "physical_audio_verified": false
+    }
+  },
+  "session_file": {
+    "header_hex": "44694769436f2020202020513120202e53455320764e2020200d",
+    "template_filename": "quantum1-v2126-empty.ses",
+    "manifest_filename": "empty-template.json",
+    "model_label": "Quantum1 / Q1",
+    "file_version": "21.0.0.2126"
+  },
+  "layouts": {
+    "controller": {
+      "size": 92,
+      "id": 4,
+      "definition": 9,
+      "identity_bytes": 13,
+      "states": 17,
+      "flags": 18,
+      "value": 24,
+      "target": 28,
+      "db": 32,
+      "next_db": 36,
+      "previous_output": 40,
+      "output": 44,
+      "auto_mode": 48,
+      "next_auto_mode": 49,
+      "display_style": 53,
+      "flash_level": 54,
+      "input_time": 59,
+      "parent": 68,
+      "audio_id": 72,
+      "restore": 80,
+      "nvr": 84,
+      "value_region_bytes": 24
+    },
+    "console_list": {
+      "size": 52,
+      "parent": 36
+    },
+    "console": {
+      "size": 108,
+      "rp_controls": 48,
+      "track_arm": 64
+    },
+    "group": {
+      "size": 164,
+      "id": 48,
+      "name": 49,
+      "recall_scope": 89,
+      "update_scope": 121
+    },
+    "module": {
+      "size": 84,
+      "id": 48,
+      "definition": 53,
+      "changed_since_snapshot": 57,
+      "child_preset_active": 58,
+      "input_gain": 59,
+      "gang_control": 68,
+      "n_signals": 74,
+      "process_output_vmt_slot": 64
+    },
+    "channel": {
+      "size": 484,
+      "id": 48,
+      "type": 49,
+      "logical": 50,
+      "name": 52,
+      "stereo_mode": 85,
+      "buss_id": 98,
+      "engine_channel": 128,
+      "tidal_channel": 130,
+      "socket_group_index": 174,
+      "input_route": 178,
+      "alt_input_route": 182,
+      "key_route": 186,
+      "buss_routes": 190,
+      "output_sockets": 241,
+      "fader_module": 430,
+      "module_references": 430,
+      "control_references": 442,
+      "data_record": 48,
+      "data_record_bytes": 373
+    },
+    "input_socket": {
+      "size": 128,
+      "copy_to_route": 120,
+      "listen_to_copy": 124
+    },
+    "output_socket": {
+      "size": 136,
+      "source_control": 84,
+      "active": 131
+    },
+    "definition": {
+      "size": 58,
+      "data_type": 0,
+      "default": 1,
+      "band": 5,
+      "parameter": 6,
+      "name": 7,
+      "units": 39,
+      "seed": 50,
+      "lut": 54,
+      "auto_flags": 42,
+      "snapshot_type": 43,
+      "gang_flag": 44,
+      "macro_flag": 45,
+      "colour": 46,
+      "data_flags": null,
+      "name_maximum": 31,
+      "units_maximum": 2
+    },
+    "list": {
+      "size": 16,
+      "items": 4,
+      "count": 8,
+      "capacity": 12
+    },
+    "meter_manager": {
+      "size": 51304,
+      "index": 49226,
+      "minimum": 49222,
+      "synthetic_cycle": 49217,
+      "configuration": 40,
+      "configuration_bytes": 13
+    },
+    "response_seed": {
+      "size": 38,
+      "curve_type": 0,
+      "unit_descriptor": 1,
+      "unit_descriptor_bytes": 31,
+      "point_count": 32,
+      "points": 34,
+      "point_size": 8,
+      "point_position": 0,
+      "point_value": 4,
+      "lut_bytes": 1024
+    },
+    "snapshot": {
+      "size": 2004,
+      "name": 40,
+      "name_capacity": 31,
+      "flags": 1072,
+      "recall_at": 1903,
+      "recall_at_active_mask": 128
+    },
+    "network_peer": {
+      "size": 567,
+      "connected": 299,
+      "socket": 269,
+      "address": 0,
+      "master": 300,
+      "broadcast": 301,
+      "active_transfer": 293
+    },
+    "save_worker": {
+      "size": 320,
+      "finished": 17,
+      "terminated": 14,
+      "fatal": 40,
+      "path": 48,
+      "error": 305,
+      "copy_error": 306
+    }
+  },
+  "semantic_limits": {
+    "delay_v2126": {
+      "8": {
+        "default": [
+          0,
+          1067869798
+        ]
+      }
+    },
+    "eq_q_v2126": {
+      "6": {
+        "0": [
+          1036831949,
+          1101004800
+        ],
+        "1": [
+          1036831949,
+          1101004800
+        ],
+        "2": [
+          1036831949,
+          1101004800
+        ],
+        "3": [
+          1036831949,
+          1062836634
+        ],
+        "4": [
+          1036831949,
+          1062836634
+        ]
+      }
+    },
+    "compressor_v2126": {
+      "17": {
+        "0": [
+          973279855,
+          1036831949
+        ],
+        "1": [
+          973279855,
+          1036831949
+        ],
+        "2": [
+          933741996,
+          1017370378
+        ]
+      },
+      "18": {
+        "0": [
+          1008981770,
+          1092616192
+        ],
+        "1": [
+          1008981770,
+          1092616192
+        ],
+        "2": [
+          981668463,
+          1036831949
+        ]
+      }
+    },
+    "gate_v2126": {
+      "17": {
+        "0": [
+          944879383,
+          1036831949
+        ],
+        "1": [
+          944879383,
+          1036831949
+        ],
+        "2": [
+          973279855,
+          1036831949
+        ]
+      },
+      "18": {
+        "0": [
+          1000593162,
+          1084227584
+        ],
+        "1": [
+          1000593162,
+          1084227584
+        ],
+        "2": [
+          1008981770,
+          1092616192
+        ]
+      }
+    }
+  },
+  "contexts": {
+    "compressor": {
+      "profile": "compressor_v2126",
+      "vmt": 8503872,
+      "callback": 8567488,
+      "mode_parameter": 58,
+      "mode_module": 5,
+      "mode_band": 0,
+      "mode_slot": 84,
+      "resending_offset": 228,
+      "minimum_size": 229,
+      "timer_offset": null
+    },
+    "gate": {
+      "profile": "gate_v2126",
+      "vmt": 8505536,
+      "callback": 8573916,
+      "mode_parameter": 11,
+      "mode_module": 5,
+      "mode_band": 3,
+      "mode_slot": 144,
+      "resending_offset": 158,
+      "minimum_size": 159,
+      "timer_offset": 157
+    },
+    "eq_q": {
+      "profile": "eq_q_v2126",
+      "vmt": 8502652,
+      "callback": 8563000,
+      "mode_parameter": 4,
+      "mode_module": 4,
+      "mode_slot_base": 88,
+      "mode_slot_stride": 24,
+      "resending_offset": null
+    },
+    "delay": {
+      "profile": "delay_v2126",
+      "vmt": 8499956,
+      "callback": 8554048,
+      "controller_slot": 84
+    }
+  },
+  "feature_validation": {
+    "inventory": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "control_write": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "routes": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "meters": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "presets": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "structure": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "transfer": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "snapshots": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "template": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "session_files": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "inspect": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    },
+    "status": {
+      "stage": "offline_runtime_verified",
+      "coverage": "selected runtime cases; not all possible control values or hardware audio"
+    }
+  }
+}

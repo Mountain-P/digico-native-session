@@ -57,12 +57,12 @@ function Get-NativeInventoryType($Context,[long]$Address) {
         }
     }
     $kind='unknown'
-    if($ancestors.Contains($Context.Base+0x8680FC)){$kind='controller'}
-    elseif($ancestors.Contains($Context.Base+0x867A2C)){$kind='module'}
-    elseif($ancestors.Contains($Context.Base+0x86660C)){$kind='channel'}
-    elseif($ancestors.Contains($Context.Base+0x86600C)){$kind='group'}
-    elseif($ancestors.Contains($Context.Base+0x864808)){$kind='console'}
-    elseif($ancestors.Contains($Context.Base+0x8645D4)){$kind='console_list'}
+    if($ancestors.Contains($Context.Base+$script:NativeBuildProfile.addresses.hex_8680fc)){$kind='controller'}
+    elseif($ancestors.Contains($Context.Base+$script:NativeBuildProfile.addresses.hex_867a2c)){$kind='module'}
+    elseif($ancestors.Contains($Context.Base+$script:NativeBuildProfile.addresses.hex_86660c)){$kind='channel'}
+    elseif($ancestors.Contains($Context.Base+$script:NativeBuildProfile.addresses.hex_86600c)){$kind='group'}
+    elseif($ancestors.Contains($Context.Base+$script:NativeBuildProfile.addresses.hex_864808)){$kind='console'}
+    elseif($ancestors.Contains($Context.Base+$script:NativeBuildProfile.addresses.hex_8645d4)){$kind='console_list'}
     $type=[pscustomobject]@{vmt=$vmt;vmt_rva=($vmt-$Context.Base);name=$names[0];instance_size=$instanceSize;kind=$kind;ancestors=$ancestors.ToArray();ancestor_names=$names.ToArray()}
     $Context.Types[$key]=$type
     return $type
@@ -71,7 +71,7 @@ function Get-NativeInventoryType($Context,[long]$Address) {
 function Get-NativeInventoryList($Context,[long]$Address,[int]$Limit,[string]$Role) {
     if($Context.ContainsKey('Lists')-and $Context.Lists.ContainsKey([string]$Address)){$cached=$Context.Lists[[string]$Address];if($cached.count-gt $Limit){throw "Inventory $Role exceeds its list bound."};return $cached}
     $type=Get-NativeInventoryType $Context $Address
-    if(-not ($type.ancestors -contains ($Context.Base+0x47660))){throw "Inventory $Role is not a TList descendant."}
+    if(-not ($type.ancestors -contains ($Context.Base+$script:NativeBuildProfile.addresses.hex_47660))){throw "Inventory $Role is not a TList descendant."}
     $header=Get-NativeInventoryBytes $Context $Address 16
     $items=[long][BitConverter]::ToUInt32($header,4);$count=[BitConverter]::ToInt32($header,8);$capacity=[BitConverter]::ToInt32($header,12)
     if($count -lt 0 -or $count -gt $Limit -or $capacity -lt $count -or $capacity -gt 1048576 -or ($count -gt 0 -and $items -eq 0)){throw "Invalid inventory $Role list bounds."}
@@ -108,26 +108,28 @@ function Test-NativeInventoryCompactIdentities($Context){
 }
 
 function Get-NativeInventoryDefinition($Context,[long]$Address) {
-    if($Address -le 0 -or ($Address+58) -gt 0x100000000L){throw ("Invalid controller definition 0x{0:x}; controller=0x{1:x}, id={2}" -f $Address,$Context.CurrentObject,$Context.CurrentId)}
+    if($Address -le 0 -or ($Address+$script:NativeBuildProfile.layouts.definition.size) -gt 0x100000000L){throw ("Invalid controller definition 0x{0:x}; controller=0x{1:x}, id={2}" -f $Address,$Context.CurrentObject,$Context.CurrentId)}
     $key=[string]$Address
     if($Context.Definitions.ContainsKey($key)){return $Context.Definitions[$key]}
-    $raw=Get-NativeInventoryBytes $Context $Address 58
-    Add-NativeInventoryIdentity $Context $Address $raw 0 58
-    $name=Get-NativeInventoryShort $Context $raw 7 31 $true
-    $units=Get-NativeInventoryShort $Context $raw 0x27 2 $true
-    $seed=[long][BitConverter]::ToUInt32($raw,0x32);$lut=[long][BitConverter]::ToUInt32($raw,0x36)
-    $rva=$null;$source='runtime_outside_image';if($Address -ge $Context.Base -and ($Address+58) -le $Context.End){$rva=$Address-$Context.Base;$source='executable_image'}
-    $entry=[ordered]@{pointer=$Address;rva=$rva;location=$source;raw_hex=(ConvertTo-NativeInventoryHex $raw);data_type=[int]$raw[0];default_value=(Get-NativeInventoryValue $raw 1);band_id=[int]$raw[5];controller_id=[int]$raw[6];name=$name.text;name_hex=$name.raw_hex;name_decoded=$name.decoded;units=$units.text;units_hex=$units.raw_hex;auto_flags=[int]$raw[0x2A];snapshot_type=[int]$raw[0x2B];gang_flag=[int]$raw[0x2C];macro_flag=[int]$raw[0x2D];colour=[BitConverter]::ToInt32($raw,0x2E);response_seed_pointer=$seed;response_lut_pointer=$lut}
+    $raw=Get-NativeInventoryBytes $Context $Address $script:NativeBuildProfile.layouts.definition.size
+    Add-NativeInventoryIdentity $Context $Address $raw 0 $script:NativeBuildProfile.layouts.definition.size
+    $name=Get-NativeInventoryShort $Context $raw $script:NativeBuildProfile.layouts.definition.name 31 $true
+    $units=Get-NativeInventoryShort $Context $raw $script:NativeBuildProfile.layouts.definition.units 2 $true
+    $seed=[long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.definition.seed);$lut=[long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.definition.lut)
+    $rva=$null;$source='runtime_outside_image';if($Address -ge $Context.Base -and ($Address+$script:NativeBuildProfile.layouts.definition.size) -le $Context.End){$rva=$Address-$Context.Base;$source='executable_image'}
+    $entry=[ordered]@{pointer=$Address;rva=$rva;location=$source;raw_hex=(ConvertTo-NativeInventoryHex $raw);data_type=[int]$raw[$script:NativeBuildProfile.layouts.definition.data_type];default_value=(Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.definition.default);band_id=[int]$raw[$script:NativeBuildProfile.layouts.definition.band];controller_id=[int]$raw[$script:NativeBuildProfile.layouts.definition.parameter];name=$name.text;name_hex=$name.raw_hex;name_decoded=$name.decoded;units=$units.text;units_hex=$units.raw_hex;auto_flags=[int]$raw[$script:NativeBuildProfile.layouts.definition.auto_flags];snapshot_type=[int]$raw[$script:NativeBuildProfile.layouts.definition.snapshot_type];gang_flag=[int]$raw[$script:NativeBuildProfile.layouts.definition.gang_flag];macro_flag=[int]$raw[$script:NativeBuildProfile.layouts.definition.macro_flag];colour=$null;response_seed_pointer=$seed;response_lut_pointer=$lut}
+    if($null-ne $script:NativeBuildProfile.layouts.definition.colour){$entry.colour=[BitConverter]::ToInt32($raw,$script:NativeBuildProfile.layouts.definition.colour)}
+    if($null-ne $script:NativeBuildProfile.layouts.definition.data_flags){$entry.data_flags=[int]$raw[$script:NativeBuildProfile.layouts.definition.data_flags]}
     if($Context.IncludeResponseTables){
         if($seed -ne 0){
-            $seedRaw=Get-NativeInventoryBytes $Context $seed 38
-            $n=[int][BitConverter]::ToUInt16($seedRaw,32);$pointsPointer=[long][BitConverter]::ToUInt32($seedRaw,34)
+            $seedRaw=Get-NativeInventoryBytes $Context $seed $script:NativeBuildProfile.layouts.response_seed.size
+            $n=[int][BitConverter]::ToUInt16($seedRaw,$script:NativeBuildProfile.layouts.response_seed.point_count);$pointsPointer=[long][BitConverter]::ToUInt32($seedRaw,$script:NativeBuildProfile.layouts.response_seed.points)
             if($n -gt 4096 -or ($n -gt 0 -and $pointsPointer -eq 0)){throw 'Invalid response-seed point bounds.'}
             $points=[Collections.Generic.List[object]]::new()
             if($n -gt 0){$pointRaw=Get-NativeInventoryBytes $Context $pointsPointer (8*$n);for($i=0;$i -lt $n;$i++){$point=Get-NativeInventorySlice $pointRaw (8*$i) 8;$points.Add([pscustomobject]@{position=[BitConverter]::ToInt32($point,0);value=(Get-NativeInventoryValue $point 4);raw_hex=(ConvertTo-NativeInventoryHex $point)})}}
             $entry.response_seed_raw_hex=ConvertTo-NativeInventoryHex $seedRaw;$entry.response_curve_type=[int]$seedRaw[0];$entry.response_point_count=$n;$entry.response_points=$points.ToArray()
         }
-        if($lut -ne 0){$entry.response_lut_raw_hex=ConvertTo-NativeInventoryHex (Get-NativeInventoryBytes $Context $lut 1024)}
+        if($lut -ne 0){$entry.response_lut_raw_hex=ConvertTo-NativeInventoryHex (Get-NativeInventoryBytes $Context $lut $script:NativeBuildProfile.layouts.response_seed.lut_bytes)}
     }
     $definition=[pscustomobject]$entry;$Context.Definitions[$key]=$definition
     return $definition
@@ -139,19 +141,23 @@ function Add-NativeInventoryEdge($Context,[long]$Pointer,[long]$Parent,[string]$
 
 function Get-NativeInventoryOwnerModeContext($Context,[long]$Pointer,$Type,[byte[]]$OwnerId,[long]$Callback) {
     $profile=$null
-    if($Type.vmt_rva -eq 0x81C240){$profile=@{Name='compressor_v2126';ModeOffset=0x54;Parameter=0x3A;Band=0;ResendingOffset=0xE4;MinimumSize=0xE5;CallbackRva=0x82BAC0;TimerOffset=$null}}
-    if($Type.vmt_rva -eq 0x81C8C0){$profile=@{Name='gate_v2126';ModeOffset=0x90;Parameter=0x0B;Band=3;ResendingOffset=0x9E;MinimumSize=0x9F;CallbackRva=0x82D3DC;TimerOffset=0x9D}}
+    foreach($contextName in @('compressor','gate')){
+        $contextProperty=$script:NativeBuildProfile.contexts.PSObject.Properties[$contextName]
+        if($null-eq $contextProperty-or $null-eq $contextProperty.Value){continue}
+        $candidate=$contextProperty.Value
+        if($Type.vmt_rva-eq $candidate.vmt){$profile=@{Name=$candidate.profile;ModeOffset=$candidate.mode_slot;Parameter=$candidate.mode_parameter;Band=$candidate.mode_band;ResendingOffset=$candidate.resending_offset;MinimumSize=$candidate.minimum_size;CallbackRva=$candidate.callback;TimerOffset=$candidate.timer_offset};break}
+    }
     if($null -eq $profile){return $null}
     if($Type.instance_size -lt $profile.MinimumSize -or $Callback -ne ($Context.Base+$profile.CallbackRva)){throw 'Native dynamics context has an unexpected class size/callback.'}
     $modeSlot=Get-NativeInventoryBytes $Context ($Pointer+$profile.ModeOffset) 4
     $modePointer=[long][BitConverter]::ToUInt32($modeSlot,0)
     if($modePointer -eq 0){throw 'Native dynamics mode controller is missing.'}
     $modeType=Get-NativeInventoryType $Context $modePointer
-    if($modeType.kind -ne 'controller' -or $modeType.instance_size -lt 0x5C){throw 'Native dynamics mode has an unexpected controller class.'}
-    $mode=Get-NativeInventoryBytes $Context $modePointer 0x5C
+    if($modeType.kind -ne 'controller' -or $modeType.instance_size -lt $script:NativeBuildProfile.layouts.controller.size){throw 'Native dynamics mode has an unexpected controller class.'}
+    $mode=Get-NativeInventoryBytes $Context $modePointer $script:NativeBuildProfile.layouts.controller.size
     $modeId=Get-NativeInventorySlice $mode 4 5
-    if($OwnerId[1] -ne 5 -or $modeId[0] -ne $profile.Parameter -or $modeId[1] -ne 5 -or $modeId[2] -ne $profile.Band -or $modeId[3] -ne $OwnerId[3] -or $modeId[4] -ne $OwnerId[4] -or [BitConverter]::ToUInt32($mode,0x44) -ne $Pointer){throw 'Native dynamics mode identity/owner binding differs.'}
-    $definitionPointer=[long][BitConverter]::ToUInt32($mode,9)
+    if($OwnerId[1] -ne 5 -or $modeId[0] -ne $profile.Parameter -or $modeId[1] -ne 5 -or $modeId[2] -ne $profile.Band -or $modeId[3] -ne $OwnerId[3] -or $modeId[4] -ne $OwnerId[4] -or [BitConverter]::ToUInt32($mode,$script:NativeBuildProfile.layouts.controller.parent) -ne $Pointer){throw 'Native dynamics mode identity/owner binding differs.'}
+    $definitionPointer=[long][BitConverter]::ToUInt32($mode,$script:NativeBuildProfile.layouts.controller.definition)
     $definition=Get-NativeInventoryDefinition $Context $definitionPointer
     if($definition.data_type -ne 0 -or $definition.controller_id -ne $profile.Parameter -or $definition.band_id -ne $profile.Band){throw 'Native dynamics mode definition differs.'}
     $children=Get-NativeInventoryList $Context $Pointer 65536 'dynamics_context_owner'
@@ -163,10 +169,10 @@ function Get-NativeInventoryOwnerModeContext($Context,[long]$Pointer,$Type,[byte
     Add-NativeInventoryIdentity $Context ($Pointer+$profile.ModeOffset) $modeSlot 0 4
     Add-NativeInventoryIdentity $Context ($Pointer+$profile.ResendingOffset) $resendingRaw 0 1
     Add-NativeInventoryIdentity $Context $modePointer $mode 0 13
-    Add-NativeInventoryIdentity $Context $modePointer $mode 0x44 4
-    Add-NativeInventoryIdentity $Context $modePointer $mode 0x2C 4
+    Add-NativeInventoryIdentity $Context $modePointer $mode $script:NativeBuildProfile.layouts.controller.parent 4
+    Add-NativeInventoryIdentity $Context $modePointer $mode $script:NativeBuildProfile.layouts.controller.output 4
     Add-NativeInventoryEdge $Context $modePointer $Pointer 'dynamics_mode_context_control'
-    $result=[ordered]@{profile=$profile.Name;owner_module_pointer=$Pointer;mode_controller_pointer=$modePointer;mode_id_hex=(ConvertTo-NativeInventoryHex $modeId);mode_output_raw_hex=(ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $mode 0x2C 4));resending=$resending}
+    $result=[ordered]@{profile=$profile.Name;owner_module_pointer=$Pointer;mode_controller_pointer=$modePointer;mode_id_hex=(ConvertTo-NativeInventoryHex $modeId);mode_output_raw_hex=(ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $mode $script:NativeBuildProfile.layouts.controller.output 4));resending=$resending}
     if($null -ne $profile.TimerOffset){$timerRaw=Get-NativeInventoryBytes $Context ($Pointer+$profile.TimerOffset) 1;Add-NativeInventoryIdentity $Context ($Pointer+$profile.TimerOffset) $timerRaw 0 1;$result.mode_changed_timer_count=[int]$timerRaw[0]}
     return [pscustomobject]$result
 }
@@ -176,10 +182,10 @@ function Get-NativeInventoryModuleOwner($Context,[long]$Pointer) {
     if($Context.ModuleOwners.ContainsKey($key)){return $Context.ModuleOwners[$key]}
     $type=Get-NativeInventoryType $Context $Pointer
     if($type.kind -ne 'module'){throw ("Controller parent 0x{0:x} is not a module; controller=0x{1:x}, id={2}" -f $Pointer,$Context.CurrentObject,$Context.CurrentId)}
-    $id=Get-NativeInventoryBytes $Context ($Pointer+0x30) 5
-    $callback=[long]$Context.Reader.U32($type.vmt+0x40)
+    $id=Get-NativeInventoryBytes $Context ($Pointer+$script:NativeBuildProfile.layouts.module.id) 5
+    $callback=[long]$Context.Reader.U32($type.vmt+$script:NativeBuildProfile.layouts.module.process_output_vmt_slot)
     if($callback -lt $Context.Base -or $callback -ge $Context.End){throw 'Module ProcessOutput callback is outside the verified image.'}
-    Add-NativeInventoryIdentity $Context ($Pointer+0x30) $id 0 5
+    Add-NativeInventoryIdentity $Context ($Pointer+$script:NativeBuildProfile.layouts.module.id) $id 0 5
     $ownerContext=Get-NativeInventoryOwnerModeContext $Context $Pointer $type $id $callback
     $entry=[pscustomobject]@{pointer=$Pointer;type=$type;id_raw=$id;id_hex=(ConvertTo-NativeInventoryHex $id);process_output_rva=($callback-$Context.Base);owner_native_context=$ownerContext;eq_q_contexts=@{}}
     $Context.ModuleOwners[$key]=$entry
@@ -187,28 +193,30 @@ function Get-NativeInventoryModuleOwner($Context,[long]$Pointer) {
 }
 
 function Get-NativeInventoryEQQContext($Context,$Owner,[byte[]]$Id){
-    if($Id[0] -ne 6 -or $Id[1] -ne 4 -or $Owner.type.vmt_rva -ne 0x81BD7C -or $Owner.process_output_rva -ne 0x82A938){return $null}
+    $contextProperty=$script:NativeBuildProfile.contexts.PSObject.Properties['eq_q']
+    if($null-eq $contextProperty-or $null-eq $contextProperty.Value){return $null}
+    if($Id[0] -ne 6 -or $Id[1] -ne 4 -or $Owner.type.vmt_rva -ne $script:NativeBuildProfile.addresses.hex_81bd7c -or $Owner.process_output_rva -ne $script:NativeBuildProfile.addresses.hex_82a938){return $null}
     $band=[int]$Id[2];if($band -gt 7){throw 'EQ Q band exceeds the inspected shape array.'}
     if($Owner.eq_q_contexts.ContainsKey([string]$band)){return $Owner.eq_q_contexts[[string]$band]}
-    $slotOffset=0x58+24*$band
+    $slotOffset=$script:NativeBuildProfile.contexts.eq_q.mode_slot_base+$script:NativeBuildProfile.contexts.eq_q.mode_slot_stride*$band
     if($Owner.type.instance_size -lt ($slotOffset+4)){throw 'EQ shape slot exceeds the native module instance.'}
     $slot=Get-NativeInventoryBytes $Context ($Owner.pointer+$slotOffset) 4
     $pointer=[long][BitConverter]::ToUInt32($slot,0)
     if($pointer -eq 0){throw 'EQ Q has no native shape controller.'}
     $type=Get-NativeInventoryType $Context $pointer
-    if($type.kind -ne 'controller' -or $type.instance_size -lt 0x5C){throw 'EQ shape has an unexpected controller class.'}
-    $raw=Get-NativeInventoryBytes $Context $pointer 0x5C
-    if($raw[4] -ne 4 -or $raw[5] -ne 4 -or $raw[6] -ne $band -or $raw[7] -ne $Id[3] -or $raw[8] -ne $Id[4] -or [BitConverter]::ToUInt32($raw,0x44) -ne $Owner.pointer){throw 'EQ shape identity/owner binding differs.'}
+    if($type.kind -ne 'controller' -or $type.instance_size -lt $script:NativeBuildProfile.layouts.controller.size){throw 'EQ shape has an unexpected controller class.'}
+    $raw=Get-NativeInventoryBytes $Context $pointer $script:NativeBuildProfile.layouts.controller.size
+    if($raw[4] -ne 4 -or $raw[5] -ne 4 -or $raw[6] -ne $band -or $raw[7] -ne $Id[3] -or $raw[8] -ne $Id[4] -or [BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.controller.parent) -ne $Owner.pointer){throw 'EQ shape identity/owner binding differs.'}
     $definition=Get-NativeInventoryDefinition $Context ([long][BitConverter]::ToUInt32($raw,9))
     if($definition.data_type -ne 0 -or $definition.controller_id -ne 4 -or $definition.band_id -ne $band){throw 'EQ shape definition differs.'}
     $children=Get-NativeInventoryList $Context $Owner.pointer 65536 'eq_context_owner'
     if(-not ($children.values -contains [uint32]$pointer)){throw 'EQ shape is not a member of its owner module.'}
     Add-NativeInventoryIdentity $Context ($Owner.pointer+$slotOffset) $slot 0 4
     Add-NativeInventoryIdentity $Context $pointer $raw 0 13
-    Add-NativeInventoryIdentity $Context $pointer $raw 0x44 4
-    Add-NativeInventoryIdentity $Context $pointer $raw 0x2C 4
+    Add-NativeInventoryIdentity $Context $pointer $raw $script:NativeBuildProfile.layouts.controller.parent 4
+    Add-NativeInventoryIdentity $Context $pointer $raw $script:NativeBuildProfile.layouts.controller.output 4
     Add-NativeInventoryEdge $Context $pointer $Owner.pointer 'eq_q_shape_context_control'
-    $entry=[pscustomobject][ordered]@{profile='eq_q_v2126';owner_module_pointer=$Owner.pointer;mode_controller_pointer=$pointer;mode_id_hex=(ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw 4 5));mode_output_raw_hex=(ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw 0x2C 4))}
+    $entry=[pscustomobject][ordered]@{profile=$script:NativeBuildProfile.semantic_profiles.eq_q_v2126;owner_module_pointer=$Owner.pointer;mode_controller_pointer=$pointer;mode_id_hex=(ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw 4 5));mode_output_raw_hex=(ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw $script:NativeBuildProfile.layouts.controller.output 4))}
     $Owner.eq_q_contexts[[string]$band]=$entry
     return $entry
 }
@@ -220,13 +228,13 @@ function Read-NativeInventoryIODeviceList($Context,[long]$GlobalRva,[string]$Rol
     $rows=[Collections.Generic.List[object]]::new()
     if($pointer -eq 0){return [pscustomobject]@{role=$Role;global_rva=$GlobalRva;pointer=0;initialized=$false;count=0;devices=$rows.ToArray()}}
     $type=Get-NativeInventoryType $Context $pointer
-    if(-not ($type.ancestors -contains ($Context.Base+0x2F85BC))){throw 'Unexpected I/O-device-list class.'}
+    if(-not ($type.ancestors -contains ($Context.Base+$script:NativeBuildProfile.addresses.hex_2f85bc))){throw 'Unexpected I/O-device-list class.'}
     $list=Get-NativeInventoryList $Context $pointer 4096 $Role
     for($i=0;$i -lt $list.count;$i++){
         $device=[long]$list.values[$i]
         if($device -eq 0){throw 'A native I/O device entry is null.'}
         $deviceType=Get-NativeInventoryType $Context $device
-        if(-not ($deviceType.ancestors -contains ($Context.Base+0x2F7C58)) -or $deviceType.instance_size -lt 0x2C){throw 'Unexpected I/O-device class.'}
+        if(-not ($deviceType.ancestors -contains ($Context.Base+$script:NativeBuildProfile.addresses.hex_2f7c58)) -or $deviceType.instance_size -lt 0x2C){throw 'Unexpected I/O-device class.'}
         $raw=Get-NativeInventoryBytes $Context $device 0x2C
         $inputs=[BitConverter]::ToInt32($raw,4);$outputs=[BitConverter]::ToInt32($raw,8)
         $inputArray=[long][BitConverter]::ToUInt32($raw,0x19);$outputArray=[long][BitConverter]::ToUInt32($raw,0x1D)
@@ -247,7 +255,7 @@ function Read-NativeInventorySocketGroups($Context,[long]$GlobalRva,[string]$Rol
     $pointer=[long][BitConverter]::ToUInt32($globalRaw,0);$rows=[Collections.Generic.List[object]]::new()
     if($pointer -eq 0){return [pscustomobject]@{role=$Role;global_rva=$GlobalRva;pointer=0;initialized=$false;count=0;groups=$rows.ToArray()}}
     $type=Get-NativeInventoryType $Context $pointer
-    if(-not ($type.ancestors -contains ($Context.Base+0x2F977C))){throw 'Unexpected socket-group-list class.'}
+    if(-not ($type.ancestors -contains ($Context.Base+$script:NativeBuildProfile.addresses.hex_2f977c))){throw 'Unexpected socket-group-list class.'}
     # This is a TStringList, not a TList. Get/GetObject/GetCount/GetCapacity
     # independently establish +20 items / +24 count / +28 capacity, stride 8.
     $header=Get-NativeInventoryBytes $Context $pointer 0x2C
@@ -273,7 +281,7 @@ function Read-NativeInventorySocketGroups($Context,[long]$GlobalRva,[string]$Rol
 function Read-NativeInventoryPorts($Context,$Groups) {
     # CE8E9C is an address indirection to the inline port-record array, not
     # an extra heap-list global. 6FA584 and B5B2A6 establish index and stride.
-    $array=[long]$Context.Reader.U32($Context.Base+0x8E8E9C)
+    $array=[long]$Context.Reader.U32($Context.Base+$script:NativeBuildProfile.addresses.hex_8e8e9c)
     $indices=@{}
     foreach($group in $Groups){$id=[int]$group.id;$index=-1;if($id -ge 0x1C -and $id -lt 0x4D){$index=$id-0x1C};if($id -ge 0x4E -and $id -lt 0x7F){$index=$id-0x4E};if($index -ge 0){$indices[[string]$index]=$index}}
     $rows=[Collections.Generic.List[object]]::new()
@@ -286,17 +294,18 @@ function Read-NativeInventoryPorts($Context,$Groups) {
 }
 
 function Read-NativeInventory([switch]$IncludeResponseTables,[int]$ChannelId=-1,[int]$ChannelType=-1,[int]$LogicalChannel=-1,[switch]$IncludePhysicalSources,[switch]$IncludeGroupOutputs,[switch]$DetailedFullInventory,[scriptblock]$ProgressCallback=$null) {
+    Assert-NativeBuildFeature 'inventory'
     # The caller supplies these variables after verifying the exact PE hash.
     if($null -eq $reader -or [long]$base -le 0 -or $null -eq $ascii -or $null -eq $nameEncoding){throw 'Inventory requires the verified runner reader/base/encoding context.'}
     if($ChannelId -lt -1 -or $ChannelId -gt 65535 -or $ChannelType -lt -1 -or $ChannelType -gt 255 -or $LogicalChannel -lt -1 -or $LogicalChannel -gt 65535){throw 'Invalid inventory channel selection.'}
     $filtered=($ChannelId -ge 0 -or $ChannelType -ge 0 -or $LogicalChannel -ge 0)
     $compact=(-not $filtered-and -not $DetailedFullInventory)
     $elapsed=[Diagnostics.Stopwatch]::StartNew()
-    $ctx=@{Reader=$reader;Base=[long]$base;End=([long]$base+0x4440000);Ascii=$ascii;Encoding=$nameEncoding;Utf16=[Text.UnicodeEncoding]::new($false,$false,$true);EncodingName=[string]$request.encoding;IncludeResponseTables=([bool]$IncludeResponseTables-and -not $compact);CurrentObject=0L;CurrentId='';Types=@{};Definitions=@{};Lists=@{};ModuleOwners=@{};Visited=@{};SourceOnlyChannels=@{};Queue=[Collections.Generic.Queue[object]]::new();ListWitnesses=[Collections.Generic.List[object]]::new();Identities=[Collections.Generic.List[object]]::new()}
-    $console=[long]$reader.U32($ctx.Base+0x1279CFC)
+    $ctx=@{Reader=$reader;Base=[long]$base;End=([long]$base+$script:NativeBuildProfile.executable.image_size);Ascii=$ascii;Encoding=$nameEncoding;Utf16=[Text.UnicodeEncoding]::new($false,$false,$true);EncodingName=[string]$request.encoding;IncludeResponseTables=([bool]$IncludeResponseTables-and -not $compact);CurrentObject=0L;CurrentId='';Types=@{};Definitions=@{};Lists=@{};ModuleOwners=@{};Visited=@{};SourceOnlyChannels=@{};Queue=[Collections.Generic.Queue[object]]::new();ListWitnesses=[Collections.Generic.List[object]]::new();Identities=[Collections.Generic.List[object]]::new()}
+    $console=[long]$reader.U32($ctx.Base+$script:NativeBuildProfile.addresses.hex_1279cfc)
     if($console -eq 0){throw 'Console inventory is not initialized.'}
     $consoleType=Get-NativeInventoryType $ctx $console
-    if($consoleType.vmt -ne ($ctx.Base+0x864808)){throw 'Unexpected console VMT for this executable profile.'}
+    if($consoleType.vmt -ne ($ctx.Base+$script:NativeBuildProfile.addresses.hex_864808)){throw 'Unexpected console VMT for this executable profile.'}
     $groups=[Collections.Generic.List[object]]::new();$channels=[Collections.Generic.List[object]]::new();$modules=[Collections.Generic.List[object]]::new();$controllers=[Collections.Generic.List[object]]::new();$unknown=[Collections.Generic.List[object]]::new();$edges=[Collections.Generic.List[object]]::new()
     $edgeCount=0
     Add-NativeInventoryEdge $ctx $console 0 'console_global'
@@ -307,15 +316,15 @@ function Read-NativeInventory([switch]$IncludeResponseTables,[int]$ChannelId=-1,
         if($ctx.Visited.Count -ge 300000){throw 'Inventory exceeded the object resource bound.'}
         $type=Get-NativeInventoryType $ctx $pointer;$ctx.Visited[[string]$pointer]=$type.kind
         $common=[ordered]@{pointer=$pointer;vmt=$type.vmt;vmt_rva=$type.vmt_rva;class_name=$type.name;instance_size=$type.instance_size;first_parent_pointer=$edge.parent;first_edge=$edge.role;first_index=$edge.index}
-        $minSize=switch($type.kind){'console'{0x6C};'group'{0xA4};'channel'{0x1E4};'module'{0x54};'controller'{0x5C};'console_list'{0x34};default{4}}
+        $minSize=switch($type.kind){'console'{$script:NativeBuildProfile.layouts.console.size};'group'{$script:NativeBuildProfile.layouts.group.size};'channel'{$script:NativeBuildProfile.layouts.channel.size};'module'{$script:NativeBuildProfile.layouts.module.size};'controller'{$script:NativeBuildProfile.layouts.controller.size};'console_list'{$script:NativeBuildProfile.layouts.console_list.size};default{4}}
         if($type.instance_size -lt $minSize){throw 'Native object is smaller than the known base class.'}
         $raw=Get-NativeInventoryBytes $ctx $pointer $minSize
         if($type.kind -ne 'controller'){Add-NativeInventoryIdentity $ctx $pointer $raw 0 4}
         if($ProgressCallback -and ($ctx.Visited.Count -eq 1 -or ($ctx.Visited.Count % 1000) -eq 0)){$null=& $ProgressCallback ([pscustomobject]@{objects=$ctx.Visited.Count;channels=$channels.Count;controllers=$controllers.Count;queue=$ctx.Queue.Count;current_pointer=$pointer;current_kind=$type.kind})}
         if($type.kind -eq 'controller'){
             $ctx.CurrentId=ConvertTo-NativeInventoryHex $raw 4 5
-            $definitionPointer=[long][BitConverter]::ToUInt32($raw,9);$definition=Get-NativeInventoryDefinition $ctx $definitionPointer
-            $owner=[long][BitConverter]::ToUInt32($raw,0x44);$ownerId=$null;$ownerType=$null;$ownerInfo=$null
+            $definitionPointer=[long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.controller.definition);$definition=Get-NativeInventoryDefinition $ctx $definitionPointer
+            $owner=[long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.controller.parent);$ownerId=$null;$ownerType=$null;$ownerInfo=$null
             if($owner -ne 0){$ownerInfo=Get-NativeInventoryModuleOwner $ctx $owner;$ownerType=$ownerInfo.type;$ownerId=$ownerInfo.id_hex}
             if([int]$raw[4] -ne $definition.controller_id){throw ("Controller parameter/definition mismatch; controller=0x{0:x}, id={1}, definition=0x{2:x}" -f $pointer,$ctx.CurrentId,$definitionPointer)}
             if($owner -ne 0){
@@ -324,7 +333,7 @@ function Read-NativeInventory([switch]$IncludeResponseTables,[int]$ChannelId=-1,
                 if([int]$raw[5] -ne [int]$ownerRaw[1] -or [int]$raw[6] -ne $expectedBand -or [int]$raw[7] -ne [int]$ownerRaw[3] -or [int]$raw[8] -ne [int]$ownerRaw[4]){throw ("Controller/module binding mismatch; controller=0x{0:x}, id={1}, module=0x{2:x}, moduleid={3}, definition=0x{4:x}" -f $pointer,$ctx.CurrentId,$owner,$ownerId,$definitionPointer)}
             }
             Add-NativeInventoryIdentity $ctx $pointer $raw 0 13
-            Add-NativeInventoryIdentity $ctx $pointer $raw 0x44 4
+            Add-NativeInventoryIdentity $ctx $pointer $raw $script:NativeBuildProfile.layouts.controller.parent 4
             $common.raw_id_hex=$ctx.CurrentId
             $common.parameter=[int]$raw[4];$common.module=[int]$raw[5];$common.band=[int]$raw[6];$common.channel=[int]$raw[7];$common.channel_type=[int]$raw[8]
             $common.definition_pointer=$definitionPointer;$common.definition_rva=$definition.rva;$common.definition_location=$definition.location;$common.definition_raw_hex=$definition.raw_hex;$common.data_type=$definition.data_type;$common.definition_name=$definition.name;$common.definition_binding_verified=($owner -ne 0)
@@ -333,28 +342,38 @@ function Read-NativeInventory([switch]$IncludeResponseTables,[int]$ChannelId=-1,
             if($ownerType){$common.module_vmt_rva=$ownerType.vmt_rva;$common.process_output_rva=$ownerInfo.process_output_rva}
             if($ownerInfo -and $null -ne $ownerInfo.owner_native_context){$common.owner_native_context=$ownerInfo.owner_native_context;$common.native_context=$ownerInfo.owner_native_context}
             if($ownerInfo -and $raw[4] -eq 6 -and $raw[5] -eq 4){$qContext=Get-NativeInventoryEQQContext $ctx $ownerInfo (Get-NativeInventorySlice $raw 4 5);if($null-ne $qContext){$common.owner_native_context=$qContext;$common.native_context=$qContext}}
-            $common.states=[int]$raw[0x11];$common.flags_u16=[int][BitConverter]::ToUInt16($raw,0x12);$common.changes=$common.flags_u16
-            if(-not $compact){$common.value=Get-NativeInventoryValue $raw 0x18;$common.next_value=Get-NativeInventoryValue $raw 0x1C;$common.db_value=Get-NativeInventoryValue $raw 0x20;$common.next_db_value=Get-NativeInventoryValue $raw 0x24;$common.previous_output_value=Get-NativeInventoryValue $raw 0x28;$common.output_value=Get-NativeInventoryValue $raw 0x2C;$common.restore_value=Get-NativeInventoryValue $raw 0x50}
-            $common.value_raw_hex=ConvertTo-NativeInventoryHex $raw 0x18 4;$common.target_raw_hex=ConvertTo-NativeInventoryHex $raw 0x1C 4;$common.output_value_raw_hex=ConvertTo-NativeInventoryHex $raw 0x2C 4
-            if($compact){$common.value_region_raw_hex=ConvertTo-NativeInventoryHex $raw 0x18 24;$common.restore_value_raw_hex=ConvertTo-NativeInventoryHex $raw 0x50 4}
-            $common.auto_mode=[int]$raw[0x30];$common.next_auto_mode=[int]$raw[0x31];$common.display_style=[int]$raw[0x35];$common.flash_level=[int]$raw[0x36];$common.input_time=[BitConverter]::ToInt32($raw,0x3B)
-            $common.audio_id_raw_hex=ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw 0x48 8)
+            $common.states=[int]$raw[$script:NativeBuildProfile.layouts.controller.states];$common.flags_u16=[int][BitConverter]::ToUInt16($raw,$script:NativeBuildProfile.layouts.controller.flags);$common.changes=$common.flags_u16
+            if(-not $compact){$common.value=Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.controller.value;$common.next_value=Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.controller.target;$common.db_value=Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.controller.db;$common.next_db_value=Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.controller.next_db;$common.previous_output_value=Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.controller.previous_output;$common.output_value=Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.controller.output;$common.restore_value=Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.controller.restore}
+            $common.value_raw_hex=ConvertTo-NativeInventoryHex $raw $script:NativeBuildProfile.layouts.controller.value 4;$common.target_raw_hex=ConvertTo-NativeInventoryHex $raw $script:NativeBuildProfile.layouts.controller.target 4;$common.output_value_raw_hex=ConvertTo-NativeInventoryHex $raw $script:NativeBuildProfile.layouts.controller.output 4
+            if($compact){$common.value_region_raw_hex=ConvertTo-NativeInventoryHex $raw $script:NativeBuildProfile.layouts.controller.value 24;$common.restore_value_raw_hex=ConvertTo-NativeInventoryHex $raw $script:NativeBuildProfile.layouts.controller.restore 4}
+            $common.auto_mode=[int]$raw[$script:NativeBuildProfile.layouts.controller.auto_mode];$common.next_auto_mode=[int]$raw[$script:NativeBuildProfile.layouts.controller.next_auto_mode];$common.display_style=[int]$raw[$script:NativeBuildProfile.layouts.controller.display_style];$common.flash_level=[int]$raw[$script:NativeBuildProfile.layouts.controller.flash_level];$common.input_time=[BitConverter]::ToInt32($raw,$script:NativeBuildProfile.layouts.controller.input_time)
+            $common.audio_id_raw_hex=ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw $script:NativeBuildProfile.layouts.controller.audio_id 8)
+            $common.response_pointer_binding_verified=$false
+            $seedSlot=$script:NativeBuildProfile.layouts.controller.PSObject.Properties['current_response_seed']
+            $lutSlot=$script:NativeBuildProfile.layouts.controller.PSObject.Properties['current_response_lut']
+            if($null-ne $seedSlot-and $null-ne $seedSlot.Value-and $null-ne $lutSlot-and $null-ne $lutSlot.Value){
+                $common.current_response_seed_pointer=[long][BitConverter]::ToUInt32($raw,[int]$seedSlot.Value)
+                $common.current_response_lut_pointer=[long][BitConverter]::ToUInt32($raw,[int]$lutSlot.Value)
+                Add-NativeInventoryIdentity $ctx $pointer $raw ([int]$seedSlot.Value) 4
+                Add-NativeInventoryIdentity $ctx $pointer $raw ([int]$lutSlot.Value) 4
+                $common.response_pointer_binding_verified=$true
+            }
             $controllers.Add([pscustomobject]$common)
             continue
         }
         if($type.kind -eq 'unknown'){$unknown.Add([pscustomobject]$common);continue}
         if($type.kind -eq 'channel'){
-            $selected=(($ChannelId -lt 0 -or [int][BitConverter]::ToUInt16($raw,0x30) -eq $ChannelId) -and ($ChannelType -lt 0 -or [int]$raw[0x31] -eq $ChannelType) -and ($LogicalChannel -lt 0 -or [int][BitConverter]::ToUInt16($raw,0x32) -eq $LogicalChannel))
-            $physical='';if([int]$raw[0x31] -ge 0x1C -and [int]$raw[0x31] -lt 0x4D){$physical='input'};if([int]$raw[0x31] -ge 0x4E -and [int]$raw[0x31] -lt 0x7F){$physical='output'}
-            if(-not $selected){if($IncludePhysicalSources -and $physical){$ctx.SourceOnlyChannels[[string]$pointer]=$physical}elseif($IncludeGroupOutputs -and [int]$raw[0x31]-eq 6){$ctx.SourceOnlyChannels[[string]$pointer]='group'}else{continue}}
+            $selected=(($ChannelId -lt 0 -or [int][BitConverter]::ToUInt16($raw,$script:NativeBuildProfile.layouts.channel.id) -eq $ChannelId) -and ($ChannelType -lt 0 -or [int]$raw[$script:NativeBuildProfile.layouts.channel.type] -eq $ChannelType) -and ($LogicalChannel -lt 0 -or [int][BitConverter]::ToUInt16($raw,$script:NativeBuildProfile.layouts.channel.logical) -eq $LogicalChannel))
+            $physical='';if([int]$raw[$script:NativeBuildProfile.layouts.channel.type] -ge 0x1C -and [int]$raw[$script:NativeBuildProfile.layouts.channel.type] -lt 0x4D){$physical='input'};if([int]$raw[$script:NativeBuildProfile.layouts.channel.type] -ge 0x4E -and [int]$raw[$script:NativeBuildProfile.layouts.channel.type] -lt 0x7F){$physical='output'}
+            if(-not $selected){if($IncludePhysicalSources -and $physical){$ctx.SourceOnlyChannels[[string]$pointer]=$physical}elseif($IncludeGroupOutputs -and [int]$raw[$script:NativeBuildProfile.layouts.channel.type]-eq 6){$ctx.SourceOnlyChannels[[string]$pointer]='group'}else{continue}}
         }
-        $common.parent_pointer=[long][BitConverter]::ToUInt32($raw,0x24)
+        $common.parent_pointer=[long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.console_list.parent)
         $sourceOnly=($type.kind -eq 'channel' -and $ctx.SourceOnlyChannels.ContainsKey([string]$pointer))
         $sourceOnlyModule=($type.kind -eq 'module' -and $ctx.SourceOnlyChannels.ContainsKey([string]$common.parent_pointer))
         $selectionRole='';if($sourceOnly){$selectionRole=$ctx.SourceOnlyChannels[[string]$pointer]};if($sourceOnlyModule){$selectionRole=$ctx.SourceOnlyChannels[[string]$common.parent_pointer]}
         if($sourceOnlyModule){$allowedModule=@('tInputSocketModule','tOutputSocketModule');if($selectionRole-eq 'group'){$allowedModule=@('tFaderModule','tOutputModule')};if($type.name-notin $allowedModule){continue}}
         $common.physical_source_only=(($sourceOnly -or $sourceOnlyModule)-and $selectionRole-ne 'group');$common.group_output_only=($selectionRole-eq 'group')
-        Add-NativeInventoryIdentity $ctx $pointer $raw 0x24 4
+        Add-NativeInventoryIdentity $ctx $pointer $raw $script:NativeBuildProfile.layouts.console_list.parent 4
         $list=Get-NativeInventoryList $ctx $pointer 65536 $type.kind
         $common.child_count=$list.count
         for($i=0;$i -lt $list.count;$i++){if($list.values[$i] -eq 0){throw 'A console-tree child is null.'};if(-not $sourceOnlyModule){Add-NativeInventoryEdge $ctx ([long]$list.values[$i]) $pointer 'list_child' $i}}
@@ -370,39 +389,39 @@ function Read-NativeInventory([switch]$IncludeResponseTables,[int]$ChannelId=-1,
                 $groups.Add([pscustomobject]$common)
             }
             'channel'{
-                $name=Get-NativeInventoryShort $ctx $raw 0x34 31
-                $common.id=[int][BitConverter]::ToUInt16($raw,0x30);$common.logical_channel=[int][BitConverter]::ToUInt16($raw,0x32);$common.channel_type=[int]$raw[0x31];$common.name=$name.text;$common.name_hex=$name.raw_hex;$common.name_decoded=$name.decoded
-                Add-NativeInventoryIdentity $ctx $pointer $raw 0x30 4
-                $common.stereo_mode=[int]$raw[0x55];$common.buss_id=[int][BitConverter]::ToUInt16($raw,0x62);$common.engine_channel=[int][BitConverter]::ToInt16($raw,0x80);$common.tidal_channel=[int][BitConverter]::ToInt16($raw,0x82)
-                $common.socket_group_index=[BitConverter]::ToInt32($raw,0xAE);$common.input_route=[BitConverter]::ToInt32($raw,0xB2);$common.alt_input_route=[BitConverter]::ToInt32($raw,0xB6);$common.key_route=[BitConverter]::ToInt32($raw,0xBA);$common.buss_routes_hex=ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw 0xBE 32)
-                $sockets=[long][BitConverter]::ToUInt32($raw,0xF1);$common.output_sockets_pointer=$sockets;$common.output_sockets=@()
+                $name=Get-NativeInventoryShort $ctx $raw $script:NativeBuildProfile.layouts.channel.name 31
+                $common.id=[int][BitConverter]::ToUInt16($raw,$script:NativeBuildProfile.layouts.channel.id);$common.logical_channel=[int][BitConverter]::ToUInt16($raw,$script:NativeBuildProfile.layouts.channel.logical);$common.channel_type=[int]$raw[$script:NativeBuildProfile.layouts.channel.type];$common.name=$name.text;$common.name_hex=$name.raw_hex;$common.name_decoded=$name.decoded
+                Add-NativeInventoryIdentity $ctx $pointer $raw $script:NativeBuildProfile.layouts.channel.id 4
+                $common.stereo_mode=[int]$raw[$script:NativeBuildProfile.layouts.channel.stereo_mode];$common.buss_id=[int][BitConverter]::ToUInt16($raw,$script:NativeBuildProfile.layouts.channel.buss_id);$common.engine_channel=[int][BitConverter]::ToInt16($raw,$script:NativeBuildProfile.layouts.channel.engine_channel);$common.tidal_channel=[int][BitConverter]::ToInt16($raw,$script:NativeBuildProfile.layouts.channel.tidal_channel)
+                $common.socket_group_index=[BitConverter]::ToInt32($raw,$script:NativeBuildProfile.layouts.channel.socket_group_index);$common.input_route=[BitConverter]::ToInt32($raw,$script:NativeBuildProfile.layouts.channel.input_route);$common.alt_input_route=[BitConverter]::ToInt32($raw,$script:NativeBuildProfile.layouts.channel.alt_input_route);$common.key_route=[BitConverter]::ToInt32($raw,$script:NativeBuildProfile.layouts.channel.key_route);$common.buss_routes_hex=ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw $script:NativeBuildProfile.layouts.channel.buss_routes 32)
+                $sockets=[long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.channel.output_sockets);$common.output_sockets_pointer=$sockets;$common.output_sockets=@()
                 if($sockets -ne 0){$socketList=Get-NativeInventoryList $ctx $sockets 65536 'output_sockets';$common.output_sockets=$socketList.values}
-                if(-not $sourceOnly){for($i=0;$i -lt 4;$i++){Add-NativeInventoryEdge $ctx ([long][BitConverter]::ToUInt32($raw,0x1BA+4*$i)) $pointer 'channel_control_reference' $i}}
-                for($i=0;$i -lt 3;$i++){Add-NativeInventoryEdge $ctx ([long][BitConverter]::ToUInt32($raw,0x1AE+4*$i)) $pointer 'channel_module_reference' $i}
-                $common.data_record_raw_hex=ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw 0x30 0x175)
+                if(-not $sourceOnly){for($i=0;$i -lt 4;$i++){Add-NativeInventoryEdge $ctx ([long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.channel.control_references+4*$i)) $pointer 'channel_control_reference' $i}}
+                for($i=0;$i -lt 3;$i++){Add-NativeInventoryEdge $ctx ([long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.channel.module_references+4*$i)) $pointer 'channel_module_reference' $i}
+                $common.data_record_raw_hex=ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw $script:NativeBuildProfile.layouts.channel.data_record $script:NativeBuildProfile.layouts.channel.data_record_bytes)
                 $channels.Add([pscustomobject]$common)
             }
             'module'{
-                $common.raw_id_hex=ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw 0x30 5)
-                $lib=[long][BitConverter]::ToUInt32($raw,0x35);$common.definition_pointer=$lib
+                $common.raw_id_hex=ConvertTo-NativeInventoryHex (Get-NativeInventorySlice $raw $script:NativeBuildProfile.layouts.module.id 5)
+                $lib=[long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.module.definition);$common.definition_pointer=$lib
                 if($lib -ne 0){$libRaw=Get-NativeInventoryBytes $ctx $lib 23;$name=Get-NativeInventoryShort $ctx $libRaw 1 15 $true;$common.definition_raw_hex=ConvertTo-NativeInventoryHex $libRaw;$common.type_id=[int]$libRaw[0];$common.name=$name.text;$common.name_hex=$name.raw_hex;$common.library_controller_count=[int][BitConverter]::ToUInt16($libRaw,0x11);$common.library_controllers_pointer=[long][BitConverter]::ToUInt32($libRaw,0x13)}
-                Add-NativeInventoryIdentity $ctx $pointer $raw 0x30 9
-                $common.changed_since_snapshot=([int]$raw[0x39] -ne 0);$common.child_preset_active=([int]$raw[0x3A] -ne 0);$common.input_gain=Get-NativeInventoryValue $raw 0x3B;$common.n_signals=[BitConverter]::ToInt32($raw,0x4A)
-                if($type.vmt_rva -in @(0x81C240,0x81C8C0)){$ownerInfo=Get-NativeInventoryModuleOwner $ctx $pointer;$common.owner_native_context=$ownerInfo.owner_native_context;$common.native_context=$ownerInfo.owner_native_context}
+                Add-NativeInventoryIdentity $ctx $pointer $raw $script:NativeBuildProfile.layouts.module.id 9
+                $common.changed_since_snapshot=([int]$raw[$script:NativeBuildProfile.layouts.module.changed_since_snapshot] -ne 0);$common.child_preset_active=([int]$raw[$script:NativeBuildProfile.layouts.module.child_preset_active] -ne 0);$common.input_gain=Get-NativeInventoryValue $raw $script:NativeBuildProfile.layouts.module.input_gain;$common.n_signals=[BitConverter]::ToInt32($raw,$script:NativeBuildProfile.layouts.module.n_signals)
+                if($type.vmt_rva -in @($script:NativeBuildProfile.addresses.hex_81c240,$script:NativeBuildProfile.addresses.hex_81c8c0)){$ownerInfo=Get-NativeInventoryModuleOwner $ctx $pointer;$common.owner_native_context=$ownerInfo.owner_native_context;$common.native_context=$ownerInfo.owner_native_context}
                 if($type.name -eq 'tInputSocketModule'){
-                    $socketRaw=Get-NativeInventoryBytes $ctx $pointer 0x80
-                    $common.socket_direction='input';$common.copy_to_route_control_pointer=[long][BitConverter]::ToUInt32($socketRaw,0x78);$common.listen_to_copy_control_pointer=[long][BitConverter]::ToUInt32($socketRaw,0x7C)
-                    Add-NativeInventoryIdentity $ctx $pointer $socketRaw 0x78 8
+                    $socketRaw=Get-NativeInventoryBytes $ctx $pointer $script:NativeBuildProfile.layouts.input_socket.size
+                    $common.socket_direction='input';$common.copy_to_route_control_pointer=[long][BitConverter]::ToUInt32($socketRaw,$script:NativeBuildProfile.layouts.input_socket.copy_to_route);$common.listen_to_copy_control_pointer=[long][BitConverter]::ToUInt32($socketRaw,$script:NativeBuildProfile.layouts.input_socket.listen_to_copy)
+                    Add-NativeInventoryIdentity $ctx $pointer $socketRaw $script:NativeBuildProfile.layouts.input_socket.copy_to_route 8
                     Add-NativeInventoryEdge $ctx $common.copy_to_route_control_pointer $pointer 'physical_copy_route_control'
                     Add-NativeInventoryEdge $ctx $common.listen_to_copy_control_pointer $pointer 'physical_listen_copy_control'
                 }
                 if($type.name -eq 'tOutputSocketModule'){
-                    $socketRaw=Get-NativeInventoryBytes $ctx $pointer 0x88
-                    $common.socket_direction='output';$common.route_control_pointer=[long][BitConverter]::ToUInt32($socketRaw,0x54);$common.socket_active=([int]$socketRaw[0x83] -ne 0)
-                    Add-NativeInventoryIdentity $ctx $pointer $socketRaw 0x54 4
+                    $socketRaw=Get-NativeInventoryBytes $ctx $pointer $script:NativeBuildProfile.layouts.output_socket.size
+                    $common.socket_direction='output';$common.route_control_pointer=[long][BitConverter]::ToUInt32($socketRaw,$script:NativeBuildProfile.layouts.output_socket.source_control);$common.socket_active=([int]$socketRaw[$script:NativeBuildProfile.layouts.output_socket.active] -ne 0)
+                    Add-NativeInventoryIdentity $ctx $pointer $socketRaw $script:NativeBuildProfile.layouts.output_socket.source_control 4
                     Add-NativeInventoryEdge $ctx $common.route_control_pointer $pointer 'physical_output_source_route_control'
                 }
-                if(-not $sourceOnlyModule){Add-NativeInventoryEdge $ctx ([long][BitConverter]::ToUInt32($raw,0x44)) $pointer 'module_gang_control'}
+                if(-not $sourceOnlyModule){Add-NativeInventoryEdge $ctx ([long][BitConverter]::ToUInt32($raw,$script:NativeBuildProfile.layouts.module.gang_control)) $pointer 'module_gang_control'}
                 $modules.Add([pscustomobject]$common)
             }
             default{$unknown.Add([pscustomobject]$common)}
@@ -410,26 +429,33 @@ function Read-NativeInventory([switch]$IncludeResponseTables,[int]$ChannelId=-1,
     }
     # These distinct global tables are used by session configuration and runtime
     # device handling respectively. "online" is the editor's flag, not a probe.
-    $configuredIO=Read-NativeInventoryIODeviceList $ctx 0x911110 'session_io_configuration'
-    $runtimeIO=Read-NativeInventoryIODeviceList $ctx 0x911114 'runtime_io_devices'
-    $configuredGroups=Read-NativeInventorySocketGroups $ctx 0x913A2C 'session_socket_groups'
-    $runtimeGroups=Read-NativeInventorySocketGroups $ctx 0x913A30 'runtime_socket_groups'
+    $configuredIO=Read-NativeInventoryIODeviceList $ctx $script:NativeBuildProfile.addresses.hex_911110 'session_io_configuration'
+    $runtimeIO=Read-NativeInventoryIODeviceList $ctx $script:NativeBuildProfile.addresses.hex_911114 'runtime_io_devices'
+    $configuredGroups=Read-NativeInventorySocketGroups $ctx $script:NativeBuildProfile.addresses.hex_913a2c 'session_socket_groups'
+    $runtimeGroups=Read-NativeInventorySocketGroups $ctx $script:NativeBuildProfile.addresses.hex_913a30 'runtime_socket_groups'
     $ports=Read-NativeInventoryPorts $ctx $groups
-    $discriminatorPointer=[long]$reader.U32($ctx.Base+0x8E92A8)
+    $discriminatorPointer=[long]$reader.U32($ctx.Base+$script:NativeBuildProfile.addresses.hex_8e92a8)
     $discriminatorRaw=Get-NativeInventoryBytes $ctx $discriminatorPointer 1
     Add-NativeInventoryIdentity $ctx $discriminatorPointer $discriminatorRaw 0 1
     $discriminator=[int]$discriminatorRaw[0]
     $walkElapsed=$elapsed.ElapsedMilliseconds
     # Validate structural witnesses after traversal; values are a sequential read,
     # not an atomic audio-state snapshot. A load/rebuild makes this call fail.
-    if([long]$reader.U32($ctx.Base+0x1279CFC) -ne $console){throw 'Console changed during inventory.'}
+    if([long]$reader.U32($ctx.Base+$script:NativeBuildProfile.addresses.hex_1279cfc) -ne $console){throw 'Console changed during inventory.'}
     foreach($w in $ctx.ListWitnesses){
         if((ConvertTo-NativeInventoryHex (Get-NativeInventoryBytes $ctx $w.address 16)) -ne $w.header_hex){throw 'A list header changed during inventory.'}
         if($w.count -gt 0 -and (ConvertTo-NativeInventoryHex (Get-NativeInventoryBytes $ctx $w.items (4*$w.count))) -ne $w.items_hex){throw 'A list membership changed during inventory.'}
     }
     $verificationStats=$null
     if($compact){$verificationStats=Test-NativeInventoryCompactIdentities $ctx}else{foreach($w in $ctx.Identities){if((ConvertTo-NativeInventoryHex (Get-NativeInventoryBytes $ctx $w.address $w.length)) -ne $w.hex){throw 'An object identity changed during inventory.'}}}
+    $profileWritesAdmitted=$false
+    if($script:NativeBuildProfile.access_mode-eq 'verified'){
+        foreach($feature in @('control_write','routes','presets','snapshots','session_files')){
+            $flag=$script:NativeBuildProfile.features.PSObject.Properties[$feature]
+            if($null-ne $flag-and $flag.Value-is [bool]-and $flag.Value){$profileWritesAdmitted=$true}
+        }
+    }
     $groupSelectionCount=@($ctx.SourceOnlyChannels.Values|Where-Object {$_-eq 'group'}).Count
     $detail='filtered_detailed';if(-not $filtered){$detail='full_detailed';if($compact){$detail='full_compact_raw'}}
-    return [pscustomobject][ordered]@{schema_version=1;profile='quantum1-v2126';executable_sha256='535097f38bb459e6e299b5da50b62fa811511d92af6d7215a13d703a416f177d';image_base=$ctx.Base;memory_read_only=$true;structure_verified=$true;values_atomic=$false;inventory_detail=$detail;response_tables_requested=[bool]$IncludeResponseTables;response_tables_included=[bool]$ctx.IncludeResponseTables;value_views_included=(-not $compact);edges_included=(-not $compact);edge_count=$edgeCount;performance=[pscustomobject]@{walk_elapsed_ms=$walkElapsed;verification_elapsed_ms=($elapsed.ElapsedMilliseconds-$walkElapsed);object_count=$ctx.Visited.Count;identity_witness_count=$ctx.Identities.Count;list_witness_count=$ctx.ListWitnesses.Count;compact_validation=$verificationStats};selection=[pscustomobject]@{full_tree=(-not $filtered);channel_id=$ChannelId;channel_type=$ChannelType;logical_channel=$LogicalChannel;include_physical_sources=[bool]$IncludePhysicalSources;include_group_outputs=[bool]$IncludeGroupOutputs;physical_source_only_channel_count=($ctx.SourceOnlyChannels.Count-$groupSelectionCount);group_output_only_channel_count=$groupSelectionCount;physical_source_only_controls_included=$true;physical_source_control_scope='input copy-route/listen-copy and output source-route only; Group outputs: Fader/Output metadata'};name_encoding=$ctx.EncodingName;console_pointer=$console;console_vmt=$consoleType.vmt;console_type=$discriminator;get_valid_values_discriminator=$discriminator;group_count=$groups.Count;channel_count=$channels.Count;module_count=$modules.Count;controller_count=$controllers.Count;unknown_node_count=$unknown.Count;groups=$groups.ToArray();channels=$channels.ToArray();modules=$modules.ToArray();controllers=$controllers.ToArray();definitions=@($ctx.Definitions.Values|Sort-Object pointer);edges=$edges.ToArray();unknown_nodes=$unknown.ToArray();io_inventory_complete=($configuredIO.initialized -and $runtimeIO.initialized -and $configuredGroups.initialized -and $runtimeGroups.initialized);io_devices=@($configuredIO,$runtimeIO);socket_groups=@($configuredGroups,$runtimeGroups);ports=$ports;output_socket_encoding='raw uint32 entries; packed route semantics pending'}
+    return [pscustomobject][ordered]@{schema_version=1;build_profile=$script:NativeBuildProfile.id;profile=$script:NativeBuildProfile.id;executable_sha256=$script:NativeBuildProfile.executable.sha256;image_base=$ctx.Base;build_validation_stage=$script:NativeBuildProfile.validation.stage;probe_read_only=($script:NativeBuildProfile.access_mode-eq 'readonly_probe');writes_admitted=$profileWritesAdmitted;memory_read_only=$true;structure_verified=$true;values_atomic=$false;inventory_detail=$detail;response_tables_requested=[bool]$IncludeResponseTables;response_tables_included=[bool]$ctx.IncludeResponseTables;value_views_included=(-not $compact);edges_included=(-not $compact);edge_count=$edgeCount;performance=[pscustomobject]@{walk_elapsed_ms=$walkElapsed;verification_elapsed_ms=($elapsed.ElapsedMilliseconds-$walkElapsed);object_count=$ctx.Visited.Count;identity_witness_count=$ctx.Identities.Count;list_witness_count=$ctx.ListWitnesses.Count;compact_validation=$verificationStats};selection=[pscustomobject]@{full_tree=(-not $filtered);channel_id=$ChannelId;channel_type=$ChannelType;logical_channel=$LogicalChannel;include_physical_sources=[bool]$IncludePhysicalSources;include_group_outputs=[bool]$IncludeGroupOutputs;physical_source_only_channel_count=($ctx.SourceOnlyChannels.Count-$groupSelectionCount);group_output_only_channel_count=$groupSelectionCount;physical_source_only_controls_included=$true;physical_source_control_scope='input copy-route/listen-copy and output source-route only; Group outputs: Fader/Output metadata'};name_encoding=$ctx.EncodingName;console_pointer=$console;console_vmt=$consoleType.vmt;console_type=$discriminator;get_valid_values_discriminator=$discriminator;group_count=$groups.Count;channel_count=$channels.Count;module_count=$modules.Count;controller_count=$controllers.Count;unknown_node_count=$unknown.Count;groups=$groups.ToArray();channels=$channels.ToArray();modules=$modules.ToArray();controllers=$controllers.ToArray();definitions=@($ctx.Definitions.Values|Sort-Object pointer);edges=$edges.ToArray();unknown_nodes=$unknown.ToArray();io_inventory_complete=($configuredIO.initialized -and $runtimeIO.initialized -and $configuredGroups.initialized -and $runtimeGroups.initialized);io_devices=@($configuredIO,$runtimeIO);socket_groups=@($configuredGroups,$runtimeGroups);ports=$ports;output_socket_encoding='raw uint32 entries; packed route semantics pending'}
 }
