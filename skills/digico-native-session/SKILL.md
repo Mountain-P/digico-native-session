@@ -1,11 +1,16 @@
 ---
 name: digico-native-session
-description: 以 DiGiCo 原生 TCP 管理已驗證 exact build 的 Windows Quantum1／2／3／5／7／8 離線編輯器 Session、Snapshot 與 allowlist 混音控制；提供 inventory、structure、meters、authoring、journal recovery 及 MCP。舊 Q1 V2126 另保留 routing、Preset、transfer；支援 Mac Parallels、唯讀記憶體驗證，不用 OSC 或 UI，不適用實體控台。
+description: 直接讀寫 DiGiCo Quantum .ses 的 Snapshot 與基本混音，或以原生 TCP 操作已驗證 Windows 離線編輯器。支援 Session、25fps、inventory、authoring 及 MCP；不用 OSC 或 UI。直接改檔保留未知區塊，不支援任意結構重建或實體控台控制。
 ---
 
 # DiGiCo 原生 Session 與混音控制
 
-使用隨附 `scripts/native_session.py`，以原生 TCP 修改離線編輯器，再用唯讀 `ReadProcessMemory` 驗證。離線規劃不連線；`execute`／`author-execute` 必須明列 `--send` 才送出。工具不安裝軟體、不啟動 VM、不更改 INI／防火牆／FPS、不操作 UI，也不寫程序記憶體。
+使用隨附 `scripts/native_session.py`。先按目標選路徑：
+
+- **本機 `.ses` 檔案**：使用 `file-inspect`／`file-clone`／`file-edit`，不需要 Windows、編輯器、VM 或網路。可解析檔頭、區塊、Snapshot 與目前基本混音，修改後保留其他資料；先讀 [直接讀寫檔案](references/direct-files.md)。檔頭只能辨識已研究的格式，不證明產生檔案的 EXE hash。不能修改 structure counts 來冒充完整結構重建。
+- **已啟動的離線編輯器**：以原生 TCP 修改，再用唯讀 `ReadProcessMemory` 驗證。以下 exact EXE／PID／listener 規則適用這條路徑。`execute`／`author-execute` 必須明列 `--send` 才送出；離線規劃不連線。
+
+兩條路徑都不用 OSC、UI 或程序記憶體寫入。工具不安裝軟體、不啟動 VM、不更改 INI／防火牆／FPS。直接改檔寫入全新輸出，不覆寫來源；工具自身解析成功不等於原廠載入驗證。
 
 ## 先選對 build 與能力
 

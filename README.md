@@ -1,8 +1,22 @@
 # DiGiCo Native Session
 
-以 DiGiCo 原生 TCP 操作 Windows Quantum 離線編輯器的 Codex skill、CLI 與 MCP。0.3 加入逐 build 的能力與控制 allowlist、具名稱／單位的 authoring、分階段執行、journal 查核及 Windows writer lease。操作不使用 OSC、UI 自動化或程序記憶體寫入；修改後以唯讀 `ReadProcessMemory` 回讀確認。
+直接讀寫 DiGiCo Quantum `.ses`，或以原生 TCP 操作 Windows 離線編輯器的 Codex skill、CLI 與 MCP。獨立檔案模式可在 Mac／Linux／Windows 修改 Snapshot 與基本混音，不需要啟動編輯器或 VM。編輯器模式提供逐 build allowlist、authoring、journal 及唯讀 `ReadProcessMemory` 回驗。操作不使用 OSC、UI 自動化或程序記憶體寫入。
 
-支援範圍由**確切 EXE SHA-256、profile 與功能開關**共同決定。以下都是離線編輯器與 25fps Session 的範圍；不延伸到實體控台、實際音訊、任意軟體版本或遠端主機。
+編輯器模式的支援範圍由**確切 EXE SHA-256、profile 與功能開關**共同決定。直接改檔依檔案的型號、格式與版本辨識，不宣稱驗證 creator EXE。兩者都不延伸到實體控台控制或實際音訊。
+
+## 不啟動編輯器，直接改檔
+
+只需 Python 3。`file-inspect` 讀取結構、Snapshot 名稱／時間與基本混音；`file-edit` 依包含來源 SHA-256 的 JSON request 寫入全新 `.ses`，更新區塊目錄並保留未知資料。`file-clone` 可做逐 byte 相同的複本。
+
+```sh
+python3 skills/digico-native-session/scripts/native_session.py file-inspect \
+  --source /absolute/work/source.ses --encoding cp950 --channel-id 0x0100
+python3 skills/digico-native-session/scripts/native_session.py file-edit \
+  --source /absolute/work/source.ses --request /absolute/work/edit.json \
+  --output /absolute/work/edited.ses --encoding cp950
+```
+
+支援 Snapshot 新增（擷取檔案內目前混音）、複製、改名、25fps timecode、刪除，以及現有 Input 的名稱、Fader、Trim、Mute。新場次從自己的相容檔案複製並編輯；不從零合成任意通道／DSP／I/O 結構。讀寫格式與原廠載入驗證範圍另見 [直接改檔指南](skills/digico-native-session/references/direct-files.md) 及 [能力矩陣](CAPABILITIES.md)。
 
 ## Build 與能力
 
@@ -29,7 +43,7 @@ git clone https://github.com/Mountain-P/digico-native-session.git
 cd digico-native-session
 ```
 
-Skill 位於 [`skills/digico-native-session`](skills/digico-native-session/SKILL.md)，可整份安裝到自己的 Codex skills 目錄，或直接使用腳本。需要 Python 3、Windows PowerShell、已安裝並啟動的相符離線編輯器；Mac 可使用既有 Parallels VM。工具不啟動 VM、安裝編輯器、修改 INI／防火牆或變更 FPS。
+Skill 位於 [`skills/digico-native-session`](skills/digico-native-session/SKILL.md)，可整份安裝到自己的 Codex skills 目錄，或直接使用腳本。直接改檔只需 Python 3；編輯器模式另需 Windows PowerShell 與已啟動的相符離線編輯器，Mac 可使用既有 Parallels VM。工具不啟動 VM、安裝編輯器、修改 INI／防火牆或變更 FPS。
 
 `profile` 只顯示隨附 metadata，不啟動或讀取目標程序：
 

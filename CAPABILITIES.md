@@ -1,6 +1,22 @@
 # 能力與驗證範圍
 
-0.3 適用於隨附 exact build profile 的 **Windows Quantum 離線編輯器、loopback、25fps Session**。所有修改使用原生 TCP，另以唯讀程序記憶體確認；不用 OSC、UI 自動化或程序記憶體寫入。EXE 名稱或產品版本相同，不代表 hash、layout 或能力相同。
+提供兩條路徑：獨立 `.ses` 檔案讀寫，以及隨附 exact build profile 的 **Windows Quantum 離線編輯器、loopback、25fps Session**。編輯器修改使用原生 TCP，另以唯讀程序記憶體確認；直接改檔不呼叫編輯器、VM 或網路。兩者不用 OSC、UI 自動化或程序記憶體寫入。EXE 名稱或產品版本相同，不代表 hash、layout 或能力相同。
+
+## 獨立 `.ses` 檔案讀寫
+
+`file-inspect`／`file-clone`／`file-edit` 直接處理已辨識的 vN／vO model/release 格式。檔案 header 不足以驗證 creator EXE；每份結果均保留 `native_acceptance_verified:false`，代表本機讀寫本身不會呼叫原廠驗證。
+
+| 能力 | 實作與驗證界線 |
+|---|---|
+| 容器／結構 | 456-byte header、offset/tag directory、123-byte ConsoleRec、區塊邊界；七個已列格式可讀，無修改輸出逐 byte 相同。 |
+| Snapshot | 讀取共享模組池、通道、名稱、編號、flags、quarter-frame timing；改名、25fps timecode、whole-number 編號、擷取同檔目前混音建立、複製、插入、刪除。保留未知欄位，更新引用與共享模組 UserCount。 |
+| 進階 Snapshot gate | D3／Preset 含外部 Snapshot origin、非空 vO SetList 或不明外部結構時，新增／複製／刪除拒絕；不把保留舊 bytes 當成正確引用重映射。 |
+| Current mix | 讀取通道名稱及 Fader／Trim／Mute；可額外列 raw controller ID、flags、value bytes，不猜未知型別。寫入只限唯一存在的 Input、owned inline module、已審閱的基本控制範圍。 |
+| 新檔／保留 | 以自己的相容檔案作起點；未知區塊保留，exclusive atomic publication 不覆寫來源。不從零建立任意 DSP／I/O／channel structure。 |
+
+六款新版的獨立合成檔已各自通過原廠 Load、Snapshot 中文名稱／timecode 回讀、Input 名稱及 Fader／Trim／Mute 的 value/output 確認，再原廠 SaveAs。重存後 D2 Snapshot 區塊與獨立輸出逐 byte 相同，包含原有 Snapshot 設定及新增 capture 的混音值。這些案例不證明任意內容或實體控台相容性。詳見 [直接讀寫](skills/digico-native-session/references/direct-files.md) 與 [已解格式](skills/digico-native-session/references/ses-format.md)。
+
+舊 Q1 V2126 另以零 Snapshot 範本直接建立 capture、名稱／25fps 時間、Input 名稱及三個基本控制，通過原廠載入、value 回讀及重存後 D2 逐 byte 比對。Q5 另驗證共享 Snapshot 的單獨 duplicate（UserCount 由1變2）與刪除唯一 Snapshot（由1變0）；原廠載入、重存後保留正確計數，D2 仍逐 byte 相同。未將這些案例推定為每個檔案內容的完整驗證。
 
 ## 逐 build 矩陣
 
@@ -55,6 +71,6 @@ SD 範圍依要求只納入升級後的 Quantum5。Quantum7 屬於 Quantum 系�
 
 舊 Q1 V2126 的私有有界 direction0 實驗已觀察到原廠 accepted 回覆與控制 state feed，並通過來源檔、選定數值、Session context 及 peer cleanup 檢查；這不構成 CLI／MCP 或完整 live-Mirror 功能，初始同步完成旗標仍為 false。
 
-實體控台／rack、音訊效果、任意 Session structure setter、完整 `.ses` parser、未核准 packed domain、palette、完整硬體 patch 與矩陣外 build 仍不列為已驗能力。詳細契約見 [build profiles](skills/digico-native-session/references/build-profiles.md)、[authoring](skills/digico-native-session/references/authoring.md) 與 [Mirror 研究](skills/digico-native-session/references/mirroring-research.md)。
+實體控台／rack、音訊效果、任意 Session structure setter、涵蓋全部區塊的 `.ses` 語意解析／從零產生器、未核准 packed domain、palette、完整硬體 patch 與矩陣外 build 仍不列為已驗能力。詳細契約見 [build profiles](skills/digico-native-session/references/build-profiles.md)、[authoring](skills/digico-native-session/references/authoring.md) 與 [Mirror 研究](skills/digico-native-session/references/mirroring-research.md)。
 
 本頁不附使用者 Session、歌單、時間碼、個人路徑、installer 或廠商二進位檔；範例與自動測試採合成資料。
