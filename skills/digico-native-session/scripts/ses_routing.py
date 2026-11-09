@@ -13,7 +13,7 @@ class SesRoutingError(SnapshotFormatError):
     pass
 
 
-_CHANNEL_WIDTH = {2126: 120, 2242: 121}
+_CHANNEL_WIDTH = {2025: 88, 2126: 120, 2242: 121}
 _PORT_WIDTH = 210
 _PORT_COUNT = 50
 _INPUT_GROUP = 0x1c

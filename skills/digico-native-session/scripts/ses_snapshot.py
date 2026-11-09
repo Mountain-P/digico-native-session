@@ -1,4 +1,4 @@
-"""Bounded, lossless Snapshot streams for the reviewed vN/vO Store layouts.
+"""Bounded, lossless Snapshot streams for the reviewed vM/vN/vO Store layouts.
 
 This module reads bytes only. It neither loads an editor nor proves that an
 edited file is accepted by an editor. Unknown record bytes and shared pools are
@@ -23,7 +23,7 @@ MAX_STREAM_BYTES = 128 * 1024 * 1024
 # bytes. Bound aggregate objects by the actual input extent, rather than a fixed
 # 200k cap which rejects a few legitimate owned full-console captures.
 MAX_ITEMS = MAX_STREAM_BYTES // 4
-SUPPORTED_VERSIONS = (2126, 2242)
+SUPPORTED_VERSIONS = (2025, 2126, 2242)
 
 
 def _integer(value, label, minimum, maximum):
@@ -302,7 +302,7 @@ class SnapshotSection:
     @classmethod
     def empty(cls, version):
         """Build the empty automation lists and observed factory options."""
-        if version not in SUPPORTED_VERSIONS:
+        if version not in (2126, 2242):
             raise SnapshotFormatError('Unreviewed Snapshot Store version')
         options = bytearray(237)
         struct.pack_into('<iii', options, 0, -1, 0, -1)

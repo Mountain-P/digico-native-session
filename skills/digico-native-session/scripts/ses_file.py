@@ -33,6 +33,9 @@ FORMAT_PROFILES = (
     'quantum1-v2126', 'quantum1-v2242-4', 'quantum2-v2242-4',
     'quantum3-v2242', 'quantum5-v2242', 'quantum7-v2242', 'quantum8-v2242',
 )
+LEGACY_READ_PROFILE = 'quantum5-v2025'
+LEGACY_FILE_HEADER = b'DiGiCo     Q5  .SES vM   \r'
+READ_FORMAT_PROFILES = (*FORMAT_PROFILES, LEGACY_READ_PROFILE)
 
 
 class SesFormatError(ValueError):
@@ -109,13 +112,18 @@ def _read_request(path):
 
 
 def _format_profile(data, requested):
-    candidates = (requested,) if requested is not None else FORMAT_PROFILES
+    candidates = (requested,) if requested is not None else READ_FORMAT_PROFILES
     matches = []
+    release = struct.unpack_from('<H', data, 34)[0]
     for name in candidates:
+        if name == LEGACY_READ_PROFILE:
+            if release == 2025 and data[:26] == LEGACY_FILE_HEADER:
+                matches.append(name)
+            continue
         profile = select_profile(build_profile=name)
         if (data[:26] == bytes.fromhex(profile['session_file']['header_hex'])
-                and struct.unpack_from('<H', data, 34)[0] == profile['release']):
-            matches.append(profile)
+                and release == profile['release']):
+            matches.append(profile['id'])
     if len(matches) != 1:
         raise SesFormatError('Unsupported or mismatched .ses model/format/version header')
     return matches[0]
@@ -217,7 +225,7 @@ class SesFile:
             raise SesFormatError('Section offset exceeds the file')
         _decode_structure(data[36:159])
         return cls(data[:HEADER_BYTES], tuple(data[a:b] for a, b in
-                   zip(offsets, offsets[1:])), profile['id'])
+                   zip(offsets, offsets[1:])), profile)
 
     @property
     def section_tags(self):
@@ -256,8 +264,9 @@ class SesFile:
 
     def _console(self):
         from ses_console import CurrentConsole
+        profile = None if self.build_profile == LEGACY_READ_PROFILE else self.build_profile
         return CurrentConsole.from_bytes(self.sections[self._section_index(0xd3)],
-                                         version=self.release, build_profile=self.build_profile)
+                                         version=self.release, build_profile=profile)
 
     def _topology(self, sections=None):
         from ses_routing import C9Console
@@ -330,6 +339,7 @@ class SesFile:
             offset += len(section)
         report = {'schema_version': 1, 'subsystem': 'independent-ses-file',
                 'format_profile': self.build_profile,
+                'read_only_profile': self.build_profile == LEGACY_READ_PROFILE,
                 'format_marker': self._header[21:22].decode('ascii'),
                 'release': struct.unpack_from('<H', self._header, 34)[0],
                 'bytes': len(data), 'sha256': _sha256(data),
@@ -359,7 +369,8 @@ class SesFile:
             snapshot_state = self._snapshots()
             index = _integer(snapshot_index, 'Snapshot index', 0, len(snapshot_state.snapshots)-1)
             snapshot = snapshot_state.snapshots[index]
-            stored = CurrentConsole(snapshot, self.release, self.build_profile,
+            profile = None if self.build_profile == LEGACY_READ_PROFILE else self.build_profile
+            stored = CurrentConsole(snapshot, self.release, profile,
                                     module_pool=snapshot_state.modules)
             report['selected_snapshot'] = {
                 'index': index, 'metadata': snapshot.inspect(encoding, include_channels=False),
@@ -377,6 +388,8 @@ class SesFile:
         return report
 
     def edit(self, request):
+        if self.build_profile == LEGACY_READ_PROFILE:
+            raise SesFormatError('Quantum5 V2025 file support is read-only')
         _fields(request, ('schema_version', 'expected_sha256', 'encoding', 'operations'),
                 ('build_profile', 'fps'))
         if type(request['schema_version']) is not int or request['schema_version'] != 1:
@@ -543,6 +556,8 @@ class SesFile:
         return result
 
     def write(self, path):
+        if self.build_profile == LEGACY_READ_PROFILE:
+            raise SesFormatError('Quantum5 V2025 file support is read-only')
         data = self.to_bytes()
         # Reparse before publication so invalid manually constructed objects fail.
         verified = SesFile.from_bytes(data, self.build_profile)
@@ -558,11 +573,19 @@ class SesFile:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
+    compare = commands.add_parser('compare', help='compare two saved Quantum5 Sessions locally')
+    compare.add_argument('--left', type=Path, required=True)
+    compare.add_argument('--right', type=Path, required=True)
+    compare.add_argument('--encoding', choices=ENCODINGS, default='cp950')
+    for side in ('left', 'right'):
+        compare.add_argument(f'--{side}-channel-id', type=lambda value: int(value, 0),
+                             help='limit signal analysis for this file to one raw channel ID')
     for command in ('inspect', 'clone', 'edit', 'new'):
         sub = commands.add_parser(command)
         if command != 'new':
             sub.add_argument('--source', type=Path, required=True)
-            sub.add_argument('--build-profile', choices=FORMAT_PROFILES)
+            sub.add_argument('--build-profile', choices=READ_FORMAT_PROFILES if command == 'inspect'
+                             else FORMAT_PROFILES)
         sub.add_argument('--encoding', choices=ENCODINGS, default='ascii')
         sub.add_argument('--channel-id', type=lambda value: int(value, 0),
                          help='filter current-mix inspection to one raw uint16 channel ID')
@@ -580,6 +603,14 @@ def main(argv=None):
             sub.add_argument('--request', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'compare':
+            from ses_compare import compare_sessions
+            report = compare_sessions(SesFile.read(args.left), SesFile.read(args.right),
+                                      args.encoding, left_channel_id=args.left_channel_id,
+                                      right_channel_id=args.right_channel_id)
+            json.dump(report, sys.stdout, ensure_ascii=False, indent=2, allow_nan=False)
+            print()
+            return 0
         if args.command == 'new':
             from ses_factory import create_session
             session = create_session(_read_request(args.request))

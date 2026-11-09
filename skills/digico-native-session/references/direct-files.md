@@ -2,6 +2,8 @@
 
 `native_session.py` 的 `file-new`、`file-inspect`、`file-clone`、`file-edit` 只需要本機 Python 3。這些命令與 `scripts/ses_file.py` 的 `new`、`inspect`、`clone`、`edit` 共用實作。
 
+若要深入比對兩份 Q5 V2025／V2242，使用 `file-compare`。Q5 V2025 支援唯讀比對與 `file-inspect`。[深度比對](file-comparison.md)
+
 ## 檔案格式與驗證範圍
 
 支援 [build profiles](build-profiles.md) 所列七個 vN／vO model／release header，包括舊 Q1 V2126 與六個新版 Quantum profile。Header 只能識別檔案格式家族，不能證明建立檔案的 exact EXE；結果明列 `format_profile`、`executable_identity_verified:false` 及 `native_acceptance_verified:false`。
