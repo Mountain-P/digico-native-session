@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "build_profile": "quantum5-v2242",
+  "encoding": "ascii",
+  "madi_port1": true,
+  "structure": {
+    "inputs": {"mono": 8, "stereo": 2},
+    "auxes": {"mono": 2, "stereo": 1},
+    "groups": {"mono": 1, "stereo": 1},
+    "matrix_inputs": 4,
+    "matrix_outputs": 2,
+    "control_groups": 4,
+    "graphic_eqs": 2
+  },
+  "operations": [
+    {"op": "set_channel_name", "channel_id": 256, "name": "Synthetic Vocal"},
+    {"op": "set_input_route", "channel_id": 256, "source": 7168},
+    {"op": "set_input_route", "channel_id": 264, "source": {"port_type": 2, "port_number": 0, "socket_index": 2}},
+    {"op": "set_control", "id": "0101000001", "value": 3},
+    {"op": "set_control", "id": "210c000001", "value": -18},
+    {"op": "set_control", "id": "210c000106", "value": 0},
+    {"op": "set_output_route", "channel_id": 1537, "leg": "left", "destination": 19968, "connected": true},
+    {"op": "set_output_route", "channel_id": 1537, "leg": "right", "destination": 19969, "connected": true},
+    {"op": "set_aux_send", "channel_id": 256, "aux_channel_id": 1280, "level": -12, "enabled": true},
+    {"op": "set_control", "id": "210c000005", "value": 0},
+    {"op": "set_output_route", "channel_id": 1280, "destination": 19970, "connected": true},
+    {"op": "set_input_route", "channel_id": 3840, "source": 7169},
+    {"op": "set_matrix_send", "channel_id": 3840, "matrix_channel_id": 4096, "level": -6, "enabled": true},
+    {"op": "set_control", "id": "210c000010", "value": 0},
+    {"op": "set_output_route", "channel_id": 4096, "destination": 19971, "connected": true},
+    {"op": "preset_capture", "channel_id": 256, "name": "Synthetic Vocal Mix", "group_name": "Demo", "scopes": ["trim", "fader"]},
+    {"op": "preset_apply", "channel_id": 257, "index": 0, "scopes": ["trim", "fader"]},
+    {"op": "create", "index": "append", "name": "Synthetic Start", "timecode": "00:00:02:00"}
+  ]
+}

@@ -1,4 +1,4 @@
 interface:
   display_name: "DiGiCo 原生控制"
-  short_description: "直接讀寫 .ses，或以原生 TCP 管理離線編輯器並回驗"
-  default_prompt: "使用 $digico-native-session，依目標選擇直接讀寫 .ses 或原生 TCP。先讀取檔案或當次編輯器狀態，再完成 Session 與混音設定並驗證。"
+  short_description: "直接建立與編輯 .ses 通道、Routing、Preset 和 Snapshot"
+  default_prompt: "使用 $digico-native-session 在本機建立或編輯 .ses，設定通道結構、Routing、Preset 和 Snapshot，再讀回驗證。"

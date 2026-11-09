@@ -299,6 +299,29 @@ class SnapshotSection:
     section_exclusions: _Block
     outer_tag: bool = True
 
+    @classmethod
+    def empty(cls, version):
+        """Build the empty automation lists and observed factory options."""
+        if version not in SUPPORTED_VERSIONS:
+            raise SnapshotFormatError('Unreviewed Snapshot Store version')
+        options = bytearray(237)
+        struct.pack_into('<iii', options, 0, -1, 0, -1)
+        options[30] = 1
+        options[31] = 2 if version == 2242 else 0
+        options[62] = 0x22
+        for offset in range(110, 158, 4):
+            struct.pack_into('<I', options, offset, 0x1fffffff)
+        struct.pack_into('<i', options, 165, -1)
+        struct.pack_into('<h', options, 171, -1)
+        struct.pack_into('<ii', options, 211, -1, -1)
+        struct.pack_into('<BH', options, 231, 1, 419)
+        scope = (struct.pack('<II', 0x7c4873be, 0x7c4873be) + bytes([255]) * 64) * 4
+        exclusions = bytearray(264)
+        for offset in range(23, 264, 66):
+            exclusions[offset] = 0x22
+        return cls(version, [], [], [], [], _Block(bytes(options)),
+                   _Block(scope), _Block(bytes(exclusions)))
+
     def byte_size(self):
         return ((4 if self.outer_tag else 2) + 16
                 + sum(item.byte_size() for item in self.modules)

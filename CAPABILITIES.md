@@ -4,15 +4,19 @@
 
 ## 獨立 `.ses` 檔案讀寫
 
-`file-inspect`／`file-clone`／`file-edit` 直接處理已辨識的 vN／vO model/release 格式。檔案 header 不足以驗證 creator EXE；每份結果均保留 `native_acceptance_verified:false`，代表本機讀寫本身不會呼叫原廠驗證。
+`file-new` 以 JSON 通道結構建立新場次。`file-inspect`、`file-clone` 和 `file-edit` 處理七個已辨識的 vN／vO 格式。檔案操作的驗證層級以 `native_acceptance_verified` 欄位標明。
 
 | 能力 | 實作與驗證界線 |
 |---|---|
-| 容器／結構 | 456-byte header、offset/tag directory、123-byte ConsoleRec、區塊邊界；七個已列格式可讀，無修改輸出逐 byte 相同。 |
+| 容器／結構 | 讀取 456-byte header、section 目錄、ConsoleRec 與 C9。六款新版可從設定建立 48 kHz／25 fps 的 mono／stereo Input、Aux、Group，並配置 Matrix、Control Group、GEQ 和本機 I/O。Q5 可選固定版型的第一組 MADI 56 進／56 出。 |
 | Snapshot | 讀取共享模組池、通道、名稱、編號、flags、quarter-frame timing；改名、25fps timecode、whole-number 編號、擷取同檔目前混音建立、複製、插入、刪除。保留未知欄位，更新引用與共享模組 UserCount。 |
 | 進階 Snapshot gate | D3／Preset 含外部 Snapshot origin、非空 vO SetList 或不明外部結構時，新增／複製／刪除拒絕；不把保留舊 bytes 當成正確引用重映射。 |
-| Current mix | 讀取通道名稱及 Fader／Trim／Mute；可額外列 raw controller ID、flags、value bytes，不猜未知型別。寫入只限唯一存在的 Input、owned inline module、已審閱的基本控制範圍。 |
-| 新檔／保留 | 以自己的相容檔案作起點；未知區塊保留，exclusive atomic publication 不覆寫來源。不從零建立任意 DSP／I/O／channel structure。 |
+| Current mix | 讀取名稱、Fader／Trim／Mute 及 raw controller records。名稱、Fader、Mute 支援 Input、Aux、Group、Matrix Output，Trim 支援 Input。 |
+| Routing | 讀取 C9／D3 與已有 F6／FC 的端點配置。支援 mono Input、成對 stereo 主／副輸入、mono Input 的 Group assignment 和 Aux send、mono Matrix 路由、實體 output，以及已配對的 stereo Aux／Group 左右聲道。 |
+| Preset | DB／D7 的 mono Input processing capture、update、rename、lock、delete、scoped apply。刪除時同步處理已辨識的 C9、D2、D3 與 DB 引用。 |
+| 新檔／保留 | `file-new` 從設定生成 section，`file-edit` 保留既有未知區塊。兩者均以原子方式寫入全新輸出。 |
+
+本次從零建立、Routing 與 Preset 編輯的驗證使用靜態程式證據、既有原廠合成存檔與獨立讀回。從零產生的檔案仍待原廠實機載入驗證。[建立與操作範圍](skills/digico-native-session/references/direct-files.md)
 
 六款新版的獨立合成檔已各自通過原廠 Load、Snapshot 中文名稱／timecode 回讀、Input 名稱及 Fader／Trim／Mute 的 value/output 確認，再原廠 SaveAs。重存後 D2 Snapshot 區塊與獨立輸出逐 byte 相同，包含原有 Snapshot 設定及新增 capture 的混音值。這些案例不證明任意內容或實體控台相容性。詳見 [直接讀寫](skills/digico-native-session/references/direct-files.md) 與 [已解格式](skills/digico-native-session/references/ses-format.md)。
 
@@ -71,6 +75,6 @@ SD 範圍依要求只納入升級後的 Quantum5。Quantum7 屬於 Quantum 系�
 
 舊 Q1 V2126 的私有有界 direction0 實驗已觀察到原廠 accepted 回覆與控制 state feed，並通過來源檔、選定數值、Session context 及 peer cleanup 檢查；這不構成 CLI／MCP 或完整 live-Mirror 功能，初始同步完成旗標仍為 false。
 
-實體控台／rack、音訊效果、任意 Session structure setter、涵蓋全部區塊的 `.ses` 語意解析／從零產生器、未核准 packed domain、palette、完整硬體 patch 與矩陣外 build 仍不列為已驗能力。詳細契約見 [build profiles](skills/digico-native-session/references/build-profiles.md)、[authoring](skills/digico-native-session/references/authoring.md) 與 [Mirror 研究](skills/digico-native-session/references/mirroring-research.md)。
+實體控台／rack、音訊效果、任意既有 Session 拓撲遷移、自訂 rack 卡組態、涵蓋全部區塊的 `.ses` 語意解析、未核准 packed domain、palette 與矩陣外 build 仍需獨立驗證。詳細契約見 [build profiles](skills/digico-native-session/references/build-profiles.md)、[authoring](skills/digico-native-session/references/authoring.md) 與 [Mirror 研究](skills/digico-native-session/references/mirroring-research.md)。
 
 本頁不附使用者 Session、歌單、時間碼、個人路徑、installer 或廠商二進位檔；範例與自動測試採合成資料。

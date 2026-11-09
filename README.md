@@ -1,14 +1,19 @@
 # DiGiCo Native Session
 
-直接讀寫 DiGiCo Quantum `.ses`，或以原生 TCP 操作 Windows 離線編輯器的 Codex skill、CLI 與 MCP。獨立檔案模式可在 Mac／Linux／Windows 修改 Snapshot 與基本混音，不需要啟動編輯器或 VM。編輯器模式提供逐 build allowlist、authoring、journal 及唯讀 `ReadProcessMemory` 回驗。操作不使用 OSC、UI 自動化或程序記憶體寫入。
+在本機建立、讀取與編輯 DiGiCo Quantum `.ses` 的 Codex skill 與 CLI。Python 檔案工具可從通道結構設定產生新場次，再設定 Routing、Preset、Snapshot 和基本混音。既有原生 TCP 與 MCP 工具適用於連線到指定 Windows 離線編輯器的工作流程。
 
 編輯器模式的支援範圍由**確切 EXE SHA-256、profile 與功能開關**共同決定。直接改檔依檔案的型號、格式與版本辨識，不宣稱驗證 creator EXE。兩者都不延伸到實體控台控制或實際音訊。
 
 ## 不啟動編輯器，直接改檔
 
-只需 Python 3。`file-inspect` 讀取結構、Snapshot 名稱／時間與基本混音；`file-edit` 依包含來源 SHA-256 的 JSON request 寫入全新 `.ses`，更新區塊目錄並保留未知資料。`file-clone` 可做逐 byte 相同的複本。
+`file-new` 只需要 Python 3 和 JSON 設定，會寫出 48 kHz／25 fps 的新場次。`file-inspect` 可讀回通道結構、Routing、Preset、Snapshot 與基本混音。`file-edit` 依來源 SHA-256 核對 JSON request 並將結果寫到新檔。`file-clone` 可做逐 byte 相同的複本。
 
 ```sh
+python3 skills/digico-native-session/scripts/native_session.py file-new \
+  --request skills/digico-native-session/assets/examples/file-new-quantum5.json \
+  --output /absolute/work/new-show.ses
+python3 skills/digico-native-session/scripts/native_session.py file-inspect \
+  --source /absolute/work/new-show.ses --topology --routing --presets
 python3 skills/digico-native-session/scripts/native_session.py file-inspect \
   --source /absolute/work/source.ses --encoding cp950 --channel-id 0x0100
 python3 skills/digico-native-session/scripts/native_session.py file-inspect \
@@ -18,7 +23,7 @@ python3 skills/digico-native-session/scripts/native_session.py file-edit \
   --output /absolute/work/edited.ses --encoding cp950
 ```
 
-支援 Snapshot 新增（擷取檔案內目前混音）、複製、改名、25fps timecode、刪除，以及現有 Input 的名稱、Fader、Trim、Mute。新場次從自己的相容檔案複製並編輯；不從零合成任意通道／DSP／I/O 結構。讀寫格式與原廠載入驗證範圍另見 [直接改檔指南](skills/digico-native-session/references/direct-files.md) 及 [能力矩陣](CAPABILITIES.md)。
+新建支援已研究的 Quantum V2242 家族、可調的 mono／stereo Input、Aux、Group 數量和本機 I/O。Q5 可加入固定版型的第一組 MADI 56 進／56 出。Snapshot 可擷取目前混音，Preset 可在 mono Input 間套用指定處理範圍。建立器依靜態格式證據與原廠既有存檔比對，並以獨立程式讀回。新建檔的原廠載入仍待驗證。[直接讀寫指南](skills/digico-native-session/references/direct-files.md) · [能力矩陣](CAPABILITIES.md)
 
 ## Build 與能力
 
