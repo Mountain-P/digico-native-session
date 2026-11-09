@@ -8,6 +8,8 @@
 
 用 `file-compare` 在本機唯讀比對 V2025／V2242 的 Recall Scope、Safe、Crossfade、Macro 和 Insert／Aux。兩份可同版或跨版。[指令與報告欄位](skills/digico-native-session/references/file-comparison.md)
 
+用 `file-recall-scope --source PATH` 查看逐 Cue、通道與參數的 Scope／Safe 分類和原因。[Recall Scope 報告](skills/digico-native-session/references/recall-scope.md)
+
 ```sh
 python3 skills/digico-native-session/scripts/native_session.py file-compare \
   --left /absolute/work/source-a.ses --right /absolute/work/source-b.ses

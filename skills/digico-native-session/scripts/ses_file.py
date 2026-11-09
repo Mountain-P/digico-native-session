@@ -139,6 +139,7 @@ def _decode_structure(raw):
         'aux_count_slots': list(struct.unpack_from('<8H', raw, 0x12)),
         'group_count_slots': list(struct.unpack_from('<8H', raw, 0x22)),
         'count_slot_labels_verified': False,
+        'snapshot_sections_enabled': bool(raw[1] & 4),
         'timecode_source_raw': raw[0x3a],
         'frame_rate_index_raw': raw[0x3b],
         'sample_frequency': sample_frequency,
@@ -573,6 +574,11 @@ class SesFile:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
+    scope = commands.add_parser('recall-scope', help='list saved Recall Scope and Safe gates per Cue')
+    scope.add_argument('--source', type=Path, required=True)
+    scope.add_argument('--snapshot-index', type=int, help='select one zero-based Cue index')
+    scope.add_argument('--channel-id', type=lambda value: int(value, 0), help='select one raw channel ID')
+    scope.add_argument('--encoding', choices=ENCODINGS, default='cp950')
     compare = commands.add_parser('compare', help='compare two saved Quantum5 Sessions locally')
     compare.add_argument('--left', type=Path, required=True)
     compare.add_argument('--right', type=Path, required=True)
@@ -603,11 +609,16 @@ def main(argv=None):
             sub.add_argument('--request', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == 'compare':
-            from ses_compare import compare_sessions
-            report = compare_sessions(SesFile.read(args.left), SesFile.read(args.right),
-                                      args.encoding, left_channel_id=args.left_channel_id,
-                                      right_channel_id=args.right_channel_id)
+        if args.command in ('recall-scope', 'compare'):
+            if args.command == 'recall-scope':
+                from ses_scope import inspect_scope_file
+                report = inspect_scope_file(SesFile.read(args.source), encoding=args.encoding,
+                                            snapshot_index=args.snapshot_index, channel_id=args.channel_id)
+            else:
+                from ses_compare import compare_sessions
+                report = compare_sessions(SesFile.read(args.left), SesFile.read(args.right),
+                                          args.encoding, left_channel_id=args.left_channel_id,
+                                          right_channel_id=args.right_channel_id)
             json.dump(report, sys.stdout, ensure_ascii=False, indent=2, allow_nan=False)
             print()
             return 0

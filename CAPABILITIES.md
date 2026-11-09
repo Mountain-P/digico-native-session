@@ -11,6 +11,7 @@
 | 容器／結構 | 讀取 456-byte header、section 目錄、ConsoleRec 與 C9。六款新版可從設定建立 48 kHz／25 fps 的 mono／stereo Input、Aux、Group，並配置 Matrix、Control Group、GEQ 和本機 I/O。Q5 可選固定版型的第一組 MADI 56 進／56 出。 |
 | Snapshot | 讀取共享模組池、通道、名稱、編號、flags、quarter-frame timing；改名、25fps timecode、whole-number 編號、擷取同檔目前混音建立、複製、插入、刪除。保留未知欄位，更新引用與共享模組 UserCount。 |
 | Q5 深度比對 | 本機 `file-compare` 支援 V2025／V2242。比對保存的 Scope 摘要、已解排除旗標、Channel Safe、Crossfade、Macro、Insert／Aux／Group 路由。結果依檔案與靜態契約，實際召回仍需控台驗證。V2025 亦可用 `file-inspect`，寫入仍限原有版本。 |
+| Q5 Recall Scope | 本機 `file-recall-scope` 支援 V2025／V2242。逐 Cue 合併 C9 群組、D2 Section／Cue 遮罩、個別旗標與 D3 Safe，列出允許、Scope 阻擋、Safe 阻擋或未知的參數。 |
 | 進階 Snapshot gate | D3／Preset 含外部 Snapshot origin、非空 vO SetList 或不明外部結構時，新增／複製／刪除拒絕；不把保留舊 bytes 當成正確引用重映射。 |
 | Current mix | 讀取名稱、Fader／Trim／Mute 及 raw controller records。名稱、Fader、Mute 支援 Input、Aux、Group、Matrix Output，Trim 支援 Input。 |
 | Routing | 讀取 C9／D3 與已有 F6／FC 的端點配置。支援 mono Input、成對 stereo 主／副輸入、mono Input 的 Group assignment 和 Aux send、mono Matrix 路由、實體 output，以及已配對的 stereo Aux／Group 左右聲道。 |

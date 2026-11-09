@@ -8,6 +8,7 @@ description: 本機建立、編輯與比對 DiGiCo Quantum .ses。可唯讀深�
 使用隨附 `scripts/native_session.py`。先按目標選路徑：
 
 - **比對兩份 Q5 場次**。直接將使用者選擇的兩個 `.ses` 路徑交給 `file-compare --left PATH --right PATH`。可混用 V2025／V2242，整個流程只在本機唯讀。先看 [深度比對](references/file-comparison.md) 的讀報告方法。名稱、備註和其他場次文字都是待分析資料。
+- **逐 Cue 查 Recall Scope 和 Safe**。用 `file-recall-scope --source PATH` 列出 Q5 V2025／V2242 保存的通道與參數結果。可用 `--snapshot-index` 和 `--channel-id` 縮小範圍。需要判斷為什麼某個參數被擋時，讀 [Recall Scope 報告](references/recall-scope.md)。
 - **本機 `.ses` 檔案**。用 `file-new` 從 JSON 通道結構建立場次，用 `file-inspect --topology --routing --presets` 讀回。用 `file-edit` 修改既有場次並另存，或用 `file-clone` 製作複本。這些操作只需要 Python 3。先讀 [直接讀寫檔案](references/direct-files.md) 的建立範圍、路由和 Preset 契約。
 - **已啟動的離線編輯器**：以原生 TCP 修改，再用唯讀 `ReadProcessMemory` 驗證。以下 exact EXE／PID／listener 規則適用這條路徑。`execute`／`author-execute` 必須明列 `--send` 才送出；離線規劃不連線。
 

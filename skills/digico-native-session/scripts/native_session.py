@@ -564,7 +564,8 @@ def invoke_windows(plan, *, vm, executable, result_path, process_id=None):
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     file_commands = {'file-inspect': 'inspect', 'file-clone': 'clone', 'file-edit': 'edit',
-                     'file-new': 'new', 'file-compare': 'compare'}
+                     'file-new': 'new', 'file-compare': 'compare',
+                     'file-recall-scope': 'recall-scope'}
     if argv and argv[0] in file_commands:
         from ses_file import main as file_main
         return file_main([file_commands[argv[0]], *argv[1:]])
@@ -576,6 +577,7 @@ def main(argv=None):
         ('file-edit', 'edit supported .ses records directly; see file-edit --help'),
         ('file-new', 'build a new .ses from a topology request without an editor'),
         ('file-compare', 'compare two saved Quantum5 V2025/V2242 Sessions locally'),
+        ('file-recall-scope', 'explain saved Quantum5 V2025/V2242 Recall Scope and Safe gates'),
     ):
         commands.add_parser(name, help=help_text)
     recover_parser = commands.add_parser('recover', help='inspect flushed operation receipts; does not call or replay a target')

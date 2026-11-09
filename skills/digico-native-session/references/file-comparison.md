@@ -13,7 +13,7 @@ python3 "$SKILL/scripts/native_session.py" file-compare \
 ## 閱讀報告
 
 1. 先看 `left`／`right` 的版本、通道結構、時鐘，以及 `differences` 的變動。對應通道使用 C9 group ID 和兩側唯一且完全相同的名稱 bytes，對應 Cue 使用兩側唯一且相同的原生編號和名稱 bytes。重名與只出現在一側的項目分開列出。比較結果中的通道對應是候選關聯，通道名稱相同仍可能接到不同音源。
-2. 看 `recall.current_safes`、`recall.snapshot_list_options` 及 `recall.cues`。Cue 包含 Crossfade 的 quarter-frame 和換算秒數、Input Fader 的排除筆數，以及把已儲存 Safe 疊加後的候選上限。Scope 區塊以長度和 SHA-256 比對，已辨識的控制器排除旗標另列。Global、Cue、Channel Safe 都可能影響最後的召回，報告的候選數不能當成控台上實際變動的路數。Safe 計數按原生 channel ID 統計，包含獨立保存的右聲道 bus leg。
+2. 看 `recall.current_safes`、`recall.snapshot_list_options` 及 `recall.cues`。Cue 包含 Crossfade、Input Fader 排除筆數和逐層套用保存遮罩後的分類計數。Scope 指紋可核對區塊是否相同。Safe 計數按原生 channel ID 統計，包含獨立保存的右聲道 bus leg。用 `file-recall-scope` 查逐通道、逐參數的理由。[Recall Scope 報告](recall-scope.md)
 3. 看 `signal.current_channels` 的 Main／Alt、Insert A／B、已開啟的 Aux send（含 tap 和 dB）及 Group 路由，再看 `signal.cue_deltas` 的相鄰 Cue 差異和 `signal.current_vs_selected_cue` 的存檔目前混音差異。Cue 比對以兩邊都保存的欄位為準，單側欄位獨立計數。通道和接點名稱取自檔案目前的 C9。每個 Cue 的差異明細有上限，未列出的筆數會標明。
 4. 看 `automation.macros` 的 Trigger 與命令。已辨識的 Smart Key、Main／Alt、Insert 開關與 Aux send 開關用語意欄位表示。Macro 的 Input 範圍使用邏輯通道號，Aux 目的地使用原生 band。其他命令保留 raw bytes。F8 section 缺席時回傳 `null`。
 
@@ -23,4 +23,4 @@ python3 "$SKILL/scripts/native_session.py" file-compare \
 
 ## 可驗證的範圍
 
-工具唯讀解析 C9、D2、D3 和 F8，E3 存在時另讀音訊同步。V2025 與 V2242 分別採 88／121-byte C9 Channel metadata。解析器解析已辨識的旗標、跨段索引和共享模組，保留未知 Scope mask 的摘要。任何 D3 Safe、Macro 或 D2 Cue 值都代表檔案保存的狀態。實體控台的載入、Recall、Macro 執行與音訊尚未由此流程驗證。
+工具唯讀解析 C9、D2、D3 和 F8，E3 存在時另讀音訊同步。V2025 與 V2242 分別採 88／121-byte C9 Channel metadata。解析器辨識已核對的遮罩、旗標、跨段索引和共享模組。任何 D3 Safe、Macro 或 D2 Cue 值都代表檔案保存的狀態。實體控台的載入、Recall、Macro 執行與音訊尚未由此流程驗證。
