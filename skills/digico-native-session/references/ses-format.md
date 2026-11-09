@@ -74,7 +74,7 @@ DB Preset section 為 `DB + count`，每筆 `D7 + ChannelSnapshot list + 三個�
 
 ## 驗證界線
 
-解析／重新輸出的 bytes 相同，證明已解 framing 與保留策略相符；合成測試另外覆蓋截斷、越界、鎖定、引用、計數與變動範圍。它不證明原廠接受所有編輯。原生接受須另以相符版本 Load、獨立欄位讀回及必要的原廠 Save／Reload 核對；當次結果與 [能力表](../../../CAPABILITIES.md) 才決定可宣稱的範圍。
+解析與重新輸出的 bytes 相同，證明已解 framing 與保留策略相符。合成測試另覆蓋截斷、越界、鎖定、引用、計數與變動範圍。原廠接受度須以相符版本載入、獨立欄位讀回及必要的原廠另存核對。[能力表](https://github.com/Mountain-P/digico-native-session/blob/main/CAPABILITIES.md)
 
 ## 新建場次與通道結構
 

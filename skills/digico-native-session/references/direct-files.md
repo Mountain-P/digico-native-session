@@ -8,16 +8,16 @@
 
 檔案工具辨識容器、ConsoleRec、C9 通道與 socket 結構、F6／FC port 資料、DB Preset、D2 Snapshot、D3 current state。編輯既有檔案時，未編輯的 section、延伸欄位與 padding 原樣保留。無修改 roundtrip 與來源逐 byte 相同。[已解格式](ses-format.md)
 
-直接產生輸出不需要 editor。原廠是否接受輸出，須另以相符版本的 native Load 及獨立回讀驗證。六款新版已各自驗證合成檔的 CP950 Snapshot 名稱、RecallAt、複製／刪除／capture、Input 名稱及 Fader／Trim／Mute；原廠重存後 D2 與獨立輸出逐 byte 相同。舊 Q1 另驗證從空範本 capture 與基本混音。Q5 另測共享引用由1變2及由1變0，原廠重存仍保留正確 UserCount。這些代表案例不能推定任意內容都相容，完整範圍見 [能力矩陣](../../../CAPABILITIES.md)。
+先前的原廠載入驗證涵蓋六款新版既有合成檔的 CP950 Snapshot 名稱、RecallAt、複製／刪除／capture、Input 名稱及 Fader／Trim／Mute。原廠重存後 D2 與獨立輸出逐 byte 相同。舊 Q1 另驗證從空範本 capture 與基本混音。Q5 的複製和刪除測試確認原廠重存的共享引用計數。從零建檔及這版新增的操作以本機重讀驗證。[能力矩陣](https://github.com/Mountain-P/digico-native-session/blob/main/CAPABILITIES.md)
 
 ## 從設定建立新 Session
 
-把 `schema_version: 1`、`build_profile`、`encoding`、`structure` 寫入 JSON，可附上 `operations`。`file-new` 依通道設定產生 header、C9、D3、local port、bank layout 與空的 Preset／Snapshot list，再依序執行操作。輸入只是一份 JSON。下例用 Q5 建立含 Input patch、stereo Master L/R、Preset 和 Snapshot 的場次。[完整合成 request](../../../examples/file-new-quantum5.json)
+把 `schema_version: 1`、`build_profile`、`encoding`、`structure` 寫入 JSON，可附上 `operations`。`file-new` 依通道設定產生 header、C9、D3、local port、bank layout 與空的 Preset／Snapshot list，再依序執行操作。輸入只是一份 JSON。下例用 Q5 建立含 Input patch、stereo Master L/R、Preset 和 Snapshot 的場次。[完整合成 request](../assets/examples/file-new-quantum5.json)
 
 ```sh
-SKILL="$PWD/skills/digico-native-session"
+SKILL="$HOME/.codex/skills/digico-native-session"
 python3 "$SKILL/scripts/native_session.py" file-new \
-  --request examples/file-new-quantum5.json \
+  --request "$SKILL/assets/examples/file-new-quantum5.json" \
   --output /absolute/work/synthetic-new.ses
 python3 "$SKILL/scripts/native_session.py" file-inspect \
   --source /absolute/work/synthetic-new.ses --topology --routing --presets
@@ -50,7 +50,7 @@ python3 "$SKILL/scripts/native_session.py" file-clone \
   --output /absolute/work/synthetic-copy.ses
 ```
 
-`inspect` 輸出來源 SHA-256、格式、結構 raw／已辨識欄位、section 摘要及可用的 Snapshot／current-mix 資料。`--channel-id` 只縮小 current-mix 的檢視，使用 raw uint16 ID，例如 Input1 常為256／`0x0100`。`--encoding` 決定報告中的文字解碼；不能嚴格解碼時保留 raw hex。
+`inspect` 輸出來源 SHA-256、格式、結構 raw／已辨識欄位、section 摘要及可用的 Snapshot／current-mix 資料。`--channel-id` 會篩選 current mix 與 Routing 的通道列，實體接點仍完整列出。選擇器使用 raw uint16 ID，例如 Input1 常為256／`0x0100`。`--encoding` 決定報告中的文字解碼，不能嚴格解碼時保留 raw hex。
 
 `--include-raw-controls` 可另列所選通道的原始 controller ID／flags／value bytes，不推測未知資料型別或單位；輸出有本機筆數上限，資料較多時使用 `--channel-id`。
 
@@ -122,10 +122,11 @@ Create／duplicate／delete 另需 D3 current capture、DB Preset，以及 vO �
 
 | `op` | 欄位與範圍 |
 |---|---|
-| `set_input_route` | `channel_id`、`source`，選填 `route_kind`。Mono Input 支援 `main`、`alt`、`key`、`mustard_key`，已有 controller 時可用 `insert_return` 搭配 `insert_index` 0／1。Stereo Input 的 `main`／`alt` 指定已核對的相鄰接點之第一個。`source: null` 解除。 |
-| `set_output_route` | `channel_id`、`destination`、`connected`。支援 mono Input／Aux／Group；stereo Aux／Group 另指定 `leg: "left"` 或 `"right"`。已被其他訊號占用的端點會拒絕連接。 |
+| `set_input_route` | `channel_id`、`source`，選填 `route_kind`。Mono Input 支援 `main`、`alt`、`key`、`mustard_key`，已有 controller 時可用 `insert_return` 搭配 `insert_index` 0／1。Stereo Input 的 `main`／`alt` 指定已核對的相鄰接點之第一個。Mono Matrix Input 支援實體 `main`／`alt`。`source: null` 解除。 |
+| `set_output_route` | `channel_id`、`destination`、`connected`。支援 mono Input／Aux／Group／Matrix Output，stereo Aux／Group 另指定 `leg: "left"` 或 `"right"`。已被其他訊號占用的端點會拒絕連接。 |
 | `set_group_assignment` | `channel_id`、`group_channel_id`、`enabled`。支援已存有相應 assignment controller 的 mono Input。 |
 | `set_aux_send` | `channel_id`、`aux_channel_id`、`level`、布林 `enabled`。支援 mono Input 到 mono Aux 的 −150 至 +10 dB send。 |
+| `set_matrix_send` | `channel_id`、`matrix_channel_id`、`level`、布林 `enabled`。支援 mono Matrix Input 到 mono Matrix Output 的 −150 至 +10 dB send。 |
 | `preset_capture` | `channel_id`、`name`，可選 `group_name`、`notes`、`scopes`，從目前 mono Input 擷取指定處理資料。 |
 | `preset_update` | `index`、`channel_id`、可選 `scopes`，以同型態目前 Input 更新已有的處理資料。 |
 | `preset_rename` | `index`、`name`，可選 `group_name`、`notes`。 |
@@ -133,7 +134,7 @@ Create／duplicate／delete 另需 D3 current capture、DB Preset，以及 vO �
 | `preset_apply` | `index`、`channel_id`、必填 `scopes`，套用相符的處理控制到目前 mono Input。 |
 | `preset_delete` | `index`，刪除未鎖定 Preset，並檢查、更新 C9／D2／D3／DB 的索引。 |
 
-`file-inspect --presets` 列出名稱、索引與處理範圍。可加 `--preset-index N --include-raw-controls` 讀指定 Preset。`index` 從零起算。名稱與群組最多31 encoded bytes，備註最多255 bytes。`scopes` 從 `trim`、`eq`、`dynamics`、`delay`、`fader`、`tidal_preamp`、`tidal_eq`、`tidal_comp`、`tidal_gate` 選擇。套用僅複製同型態 Input 已辨識的處理值。實體輸入增益、Insert send、硬體連線、FX／Mix／多通道 Preset 在目前 authoring 範圍外。
+`file-inspect --presets` 列出名稱、索引與工具支援的處理範圍。用 `--preset-index N --include-raw-controls` 確認單一 Preset 實際保存的模組和控制值。`index` 從零起算。名稱與群組最多31 encoded bytes，備註最多255 bytes。`scopes` 從 `trim`、`eq`、`dynamics`、`delay`、`fader`、`tidal_preamp`、`tidal_eq`、`tidal_comp`、`tidal_gate` 選擇。套用僅複製同型態 Input 已辨識的處理值。實體輸入增益、Insert send、硬體連線、FX／Mix／多通道 Preset 在目前 authoring 範圍外。
 
 ## 輸出與資源界線
 

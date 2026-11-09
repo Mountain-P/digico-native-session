@@ -420,7 +420,8 @@ class SesFile:
                     console.set_basic_control(operation['id'], operation['value'])
                 # Later create operations capture the edited current state.
                 sections[self._section_index(0xd3)] = console.to_bytes()
-            elif op in ('set_input_route', 'set_output_route', 'set_group_assignment', 'set_aux_send'):
+            elif op in ('set_input_route', 'set_output_route', 'set_group_assignment',
+                        'set_aux_send', 'set_matrix_send'):
                 if console is None:
                     console = self._console()
                 if routing is None:
@@ -439,10 +440,14 @@ class SesFile:
                     _fields(operation, ('op', 'channel_id', 'group_channel_id', 'enabled'), label=op)
                     routing.set_group_assignment(operation['channel_id'], operation['group_channel_id'],
                                                  operation['enabled'])
-                else:
+                elif op == 'set_aux_send':
                     _fields(operation, ('op', 'channel_id', 'aux_channel_id', 'level', 'enabled'), label=op)
                     routing.set_aux_send(operation['channel_id'], operation['aux_channel_id'],
                                          operation['level'], operation['enabled'])
+                else:
+                    _fields(operation, ('op', 'channel_id', 'matrix_channel_id', 'level', 'enabled'), label=op)
+                    routing.set_matrix_send(operation['channel_id'], operation['matrix_channel_id'],
+                                            operation['level'], operation['enabled'])
                 sections[self._section_index(0xd3)] = console.to_bytes()
             elif op in ('preset_capture', 'preset_update', 'preset_rename',
                         'preset_delete', 'preset_apply', 'preset_lock'):

@@ -318,10 +318,10 @@ _INPUT_PROCESSING_DEFAULTS = {
     30: {0x02: (0,), 0x03: (0,), 0x05: (20000, 20), 0x0A: (40,), 0x0B: (0,), 0x0E: (-20,),
          0x11: (0.002,), 0x12: (0.14,), 0x13: (0.14,), 0x37: (0,), 0x4C: (1,)},
 }
-_CURRENT_MODULE_ORDER = (1, 9, 7, 8, 4, 5, 12, 2, 3, 14, 17, 18, 26, 27, 28, 29, 30)
+_CURRENT_MODULE_ORDER = (1, 6, 9, 7, 8, 4, 5, 12, 2, 3, 14, 17, 18, 26, 27, 28, 29, 30)
 
 
-def _current_channel(channel, aux_outputs, group_outputs, master_channel_id):
+def _current_channel(channel, aux_outputs, group_outputs, master_channel_id, *, matrix_outputs=()):
     metadata = bytearray(39)
     struct.pack_into('<H', metadata, 0, channel.channel_id)
     metadata[2] = len(channel.name)
@@ -335,6 +335,13 @@ def _current_channel(channel, aux_outputs, group_outputs, master_channel_id):
     if kind in (0x01, 0x0C):
         controls[1] = [(0, 0, zero), (0, 1, zero), (1, 0, zero)]
         controls[5] = [(0x16, 0, zero)]
+    if kind == 0x0F:
+        controls[1] = [(0, 0, zero), (0, 1, zero), (1, 0, zero)]
+        if matrix_outputs:
+            level_off = struct.pack('<f', -150.0)
+            controls[6] = [(parameter, output.channel_id & 255, value)
+                           for output in matrix_outputs
+                           for parameter, value in ((0x24, level_off), (0x25, zero))]
     if kind == 0x01:
         controls[8] = [(0, 0, zero), (0, 1, zero)]
         controls[30] = [(0x16, 0, zero)]
@@ -367,7 +374,7 @@ def _current_channel(channel, aux_outputs, group_outputs, master_channel_id):
     return ChannelSnapshot(_Block(b'\x01'), modules, _Block(bytes(metadata)))
 
 
-def _current_mix(channels, aux_outputs, group_outputs, master_channel_id):
+def _current_mix(channels, aux_outputs, group_outputs, matrix_outputs, master_channel_id):
     scope = bytearray(b'\xff' * 992)
     scope[288:320] = bytes(32)
     layout = bytearray(807)
@@ -379,7 +386,8 @@ def _current_mix(channels, aux_outputs, group_outputs, master_channel_id):
     timing[41:47] = b'\x05Arial'
     timing[77:] = b'\xff' * 4
     return ConsoleSnapshot(
-        [_current_channel(channel, aux_outputs, group_outputs, master_channel_id)
+        [_current_channel(channel, aux_outputs, group_outputs, master_channel_id,
+                          matrix_outputs=matrix_outputs)
          for channel in channels],
         _Block(b''), bytes(8), _Block(bytes(scope)), _Block(bytes(2)), b'',
         _Block(bytes(8)), _Block(bytes(layout)), _Block(bytes(timing)), _Block(b''), _Block(b''),
@@ -417,6 +425,7 @@ def build_structure(profile_id, configuration):
                                  'graphic_eqs', limits.graphic_eqs)
     master_channel_id = 0x0600 | groups.mono
     aux_outputs, group_outputs, right_busses = _output_busses(auxes, groups)
+    matrix_output_channels = _plain_channels(0x10, _numbered(b'Matrix ', matrix_outputs))
     local_inputs, local_outputs = _local_socket_names(limits)
     spice_channels = [_Channel(0x1800 | index, index + 1, b'Chilli 6',
                                engine_channel=index if index < 16 else index + 48)
@@ -435,7 +444,7 @@ def build_structure(profile_id, configuration):
                                engine_start=groups.legs + auxes.legs, engine_step=8)),
         (0x08, _plain_channels(0x08, (b'Monitoring',), stereo_mode=2)),
         (0x0A, _plain_channels(0x0A, _numbered(b'CG ', control_groups))),
-        (0x10, _plain_channels(0x10, _numbered(b'Matrix ', matrix_outputs))),
+        (0x10, matrix_output_channels),
         (0x0F, _plain_channels(0x0F, _numbered(b'mtx In ', matrix_inputs))),
         (0x07, right_busses),
         (0x05, aux_outputs),
@@ -460,5 +469,6 @@ def build_structure(profile_id, configuration):
     record = _console_record(limits, inputs, auxes, groups, matrix_inputs,
                              matrix_outputs, control_groups, graphic_eqs)
     return BuiltStructure(record, topology,
-                          _current_mix(channels, aux_outputs, group_outputs, master_channel_id),
+                          _current_mix(channels, aux_outputs, group_outputs,
+                                       matrix_output_channels, master_channel_id),
                           master_channel_id)

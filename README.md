@@ -10,7 +10,8 @@
 
 ```sh
 python3 skills/digico-native-session/scripts/native_session.py file-new \
-  --request examples/file-new-quantum5.json --output /absolute/work/new-show.ses
+  --request skills/digico-native-session/assets/examples/file-new-quantum5.json \
+  --output /absolute/work/new-show.ses
 python3 skills/digico-native-session/scripts/native_session.py file-inspect \
   --source /absolute/work/new-show.ses --topology --routing --presets
 python3 skills/digico-native-session/scripts/native_session.py file-inspect \

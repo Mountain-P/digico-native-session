@@ -12,7 +12,7 @@
 | Snapshot | 讀取共享模組池、通道、名稱、編號、flags、quarter-frame timing；改名、25fps timecode、whole-number 編號、擷取同檔目前混音建立、複製、插入、刪除。保留未知欄位，更新引用與共享模組 UserCount。 |
 | 進階 Snapshot gate | D3／Preset 含外部 Snapshot origin、非空 vO SetList 或不明外部結構時，新增／複製／刪除拒絕；不把保留舊 bytes 當成正確引用重映射。 |
 | Current mix | 讀取名稱、Fader／Trim／Mute 及 raw controller records。名稱、Fader、Mute 支援 Input、Aux、Group、Matrix Output，Trim 支援 Input。 |
-| Routing | 讀取 C9／D3 與已有 F6／FC 的端點配置。支援 mono Input、成對 stereo 主／副輸入、mono Input 的 Group assignment 和 Aux send、實體 output，以及已配對的 stereo Aux／Group 左右聲道。 |
+| Routing | 讀取 C9／D3 與已有 F6／FC 的端點配置。支援 mono Input、成對 stereo 主／副輸入、mono Input 的 Group assignment 和 Aux send、mono Matrix 路由、實體 output，以及已配對的 stereo Aux／Group 左右聲道。 |
 | Preset | DB／D7 的 mono Input processing capture、update、rename、lock、delete、scoped apply。刪除時同步處理已辨識的 C9、D2、D3 與 DB 引用。 |
 | 新檔／保留 | `file-new` 從設定生成 section，`file-edit` 保留既有未知區塊。兩者均以原子方式寫入全新輸出。 |
 

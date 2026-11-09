@@ -18,7 +18,7 @@ from ses_structure import CREATION_PROFILES
 
 class NewSessionWorkflowTests(unittest.TestCase):
     def test_create_file_then_read_routing_and_preset_through_cli(self):
-        request = ROOT / 'examples' / 'file-new-quantum5.json'
+        request = ROOT / 'skills/digico-native-session/assets/examples/file-new-quantum5.json'
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'synthetic.ses'
             with contextlib.redirect_stdout(io.StringIO()):
@@ -41,6 +41,10 @@ class NewSessionWorkflowTests(unittest.TestCase):
             self.assertIn({'aux_channel_id': 0x500, 'level': -12, 'enabled': True},
                           channels[0x100]['aux_sends'])
             self.assertEqual(channels[0x500]['physical_outputs'], [0x4e02])
+            self.assertEqual(channels[0xf00]['input_routes']['main'], 0x1c010000)
+            self.assertIn({'matrix_channel_id': 0x1000, 'level': -6, 'enabled': True},
+                          channels[0xf00]['matrix_sends'])
+            self.assertEqual(channels[0x1000]['physical_outputs'], [0x4e03])
             capture = report['selected_snapshot']
             self.assertEqual(capture['metadata']['recall_at'], 200)
             stored = {row['channel_id']: row for row in capture['stored_mix']['channels']}

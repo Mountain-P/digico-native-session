@@ -28,7 +28,9 @@ _INPUT_KINDS = {
 _ZERO = b'\0' * 4
 _NEGATIVE_ZERO = b'\0\0\0\x80'
 _ONE = struct.pack('<f', 1)
-_AUX_SEND_LEVEL_RANGE = (-150, 10)
+_SEND_LEVEL_RANGE = (-150, 10)
+_AUX_SEND = (1, 2, 2)
+_MATRIX_SEND = (0x24, 0x25, 6)
 
 
 def _bounded_int(value, label, low, high):
@@ -448,9 +450,11 @@ class SesRouting:
         return self._socket(((first + candidates[0]) << 8) | socket_index, direction)
 
     def set_input_route(self, channel_id, source, route_kind='main', insert_index=0):
-        channel = self._channel(channel_id, groups=(1,), modes=(1, 2))
+        channel = self._channel(channel_id, groups=(1, 0x0f), modes=(1, 2))
         if not isinstance(route_kind, str) or route_kind not in _INPUT_KINDS:
             raise SesRoutingError('Unknown Input route kind')
+        if channel_id >> 8 == 0x0f and (channel.stereo_mode != 1 or route_kind not in ('main', 'alt')):
+            raise SesRoutingError('Matrix Input routing supports mono main and alt only')
         if channel.stereo_mode == 2 and route_kind not in ('main', 'alt'):
             raise SesRoutingError('Stereo Input routing supports main and alt only')
         band = _bounded_int(insert_index, 'Insert index', 0, 1)
@@ -492,7 +496,7 @@ class SesRouting:
         return companion.channel_id
 
     def _output_source(self, channel_id, leg):
-        channel = self._channel(channel_id, groups=(1, 5, 6), modes=(1, 2))
+        channel = self._channel(channel_id, groups=(1, 5, 6, 0x10), modes=(1, 2))
         if channel.stereo_mode == 1:
             if leg is not None:
                 raise SesRoutingError('leg applies only to stereo Aux or Group buses')
@@ -565,30 +569,50 @@ class SesRouting:
     def set_aux_send(self, channel_id, aux_channel_id, level, enabled):
         self._channel(channel_id, groups=(1,), modes=(1,))
         self._channel(aux_channel_id, groups=(5,), modes=(1,))
+        return self._set_send(channel_id, aux_channel_id, level, enabled, _AUX_SEND)
+
+    def set_matrix_send(self, channel_id, matrix_channel_id, level, enabled):
+        self._channel(channel_id, groups=(0x0f,), modes=(1,))
+        self._channel(matrix_channel_id, groups=(0x10,), modes=(1,))
+        if matrix_channel_id not in self._matrix_send_destinations():
+            raise SesRoutingError('Matrix Output has no matching native band position')
+        return self._set_send(channel_id, matrix_channel_id, level, enabled, _MATRIX_SEND)
+
+    def _matrix_send_destinations(self):
+        group = next((group for group in self.c9.groups if group.group_id == 0x10), None)
+        if group is None:
+            return []
+        return [channel.channel_id for band, channel in enumerate(group.channels)
+                if channel.channel_id == 0x1000 + band and channel.logical_channel == band + 1
+                and channel.stereo_mode == 1]
+
+    def _set_send(self, channel_id, destination, level, enabled, keys):
         if type(enabled) is not bool:
             raise SesRoutingError('enabled must be Boolean')
-        low, high = _AUX_SEND_LEVEL_RANGE
+        low, high = _SEND_LEVEL_RANGE
         if type(level) not in (int, float) or not low <= level <= high:
-            raise SesRoutingError(f'Aux send level requires finite dB in {low}..{high}')
-        band = aux_channel_id & 255
-        send_level = self._control(channel_id, (1, 2, band))
-        send_on = self._control(channel_id, (2, 2, band))
+            raise SesRoutingError(f'Send level requires finite dB in {low}..{high}')
+        level_key, on_key, module = keys
+        band = destination & 255
+        send_level = self._control(channel_id, (level_key, module, band))
+        send_on = self._control(channel_id, (on_key, module, band))
         if send_on.raw not in (_ZERO, _NEGATIVE_ZERO, _ONE):
-            raise SesRoutingError('Aux send on value is outside its Boolean encoding')
+            raise SesRoutingError('Send on value is outside its Boolean encoding')
         send_level.replace(struct.pack('<f', level))
         send_on.replace(_ONE if enabled else _ZERO)
         return self
 
-    def _inspect_aux_sends(self, channel_id, aux_ids):
+    def _inspect_sends(self, channel_id, destinations, keys, id_key):
         sends = []
-        for aux_id in aux_ids:
-            band = aux_id & 255
-            level = self._control(channel_id, (1, 2, band), optional=True)
-            enabled = self._control(channel_id, (2, 2, band), optional=True)
+        level_key, on_key, module = keys
+        for destination in destinations:
+            band = destination & 255
+            level = self._control(channel_id, (level_key, module, band), optional=True)
+            enabled = self._control(channel_id, (on_key, module, band), optional=True)
             if level is None or enabled is None:
                 continue
             value = struct.unpack('<f', level.raw)[0]
-            sends.append({'aux_channel_id': aux_id, 'level': value if math.isfinite(value) else None,
+            sends.append({id_key: destination, 'level': value if math.isfinite(value) else None,
                           'enabled': {_ZERO: False, _NEGATIVE_ZERO: False, _ONE: True}.get(enabled.raw)})
         return sends
 
@@ -615,14 +639,16 @@ class SesRouting:
         channels = []
         mono_aux_ids = [aux_id for aux_id in sorted(self.topology)
                         if aux_id >> 8 == 5 and self.topology[aux_id].stereo_mode == 1]
+        matrix_ids = self._matrix_send_destinations()
         for source_id in sorted(self.topology):
-            if source_id >> 8 not in (1, 5, 6) or (channel_id is not None and channel_id != source_id):
+            group_id = source_id >> 8
+            if group_id not in (1, 5, 6, 0x0f, 0x10) or (channel_id is not None and channel_id != source_id):
                 continue
             row = {'channel_id': source_id, 'stereo_mode': self.topology[source_id].stereo_mode,
                    'input_routes': {}, 'group_assignments': [],
                    'physical_outputs': [e['channel_id'] for e in sockets['outputs']
                                         if e['source_route_uint32'] == source_id << 16]}
-            if source_id >> 8 in (5, 6) and row['stereo_mode'] == 2:
+            if group_id in (5, 6) and row['stereo_mode'] == 2:
                 try:
                     right = self._stereo_companion(self.topology[source_id])
                 except SesRoutingError:
@@ -633,22 +659,27 @@ class SesRouting:
                               if right is not None and e['source_route_uint32'] == right << 16],
                     'right_channel_id': right,
                 }
-            if source_id >> 8 == 1:
-                if row['stereo_mode'] == 1:
-                    row['aux_sends'] = self._inspect_aux_sends(source_id, mono_aux_ids)
+            if group_id in (1, 0x0f):
                 for kind, key in _INPUT_KINDS.items():
+                    if group_id == 0x0f and kind not in ('main', 'alt'):
+                        continue
                     bands = (0, 1) if kind == 'insert_return' else (key[2],)
                     for band in bands:
                         control = self._control(source_id, (*key[:2], band), optional=True)
                         if control is not None:
                             label = f'{kind}_{band}' if kind == 'insert_return' else kind
                             row['input_routes'][label] = control.route
-                for group_id in sorted(self.topology):
-                    if group_id >> 8 != 6:
+            if group_id == 1:
+                if row['stereo_mode'] == 1:
+                    row['aux_sends'] = self._inspect_sends(source_id, mono_aux_ids, _AUX_SEND, 'aux_channel_id')
+                for group_channel_id in sorted(self.topology):
+                    if group_channel_id >> 8 != 6:
                         continue
-                    control = self._control(source_id, (9, 3, group_id & 255), optional=True)
+                    control = self._control(source_id, (9, 3, group_channel_id & 255), optional=True)
                     if control is not None and control.raw == _ONE:
-                        row['group_assignments'].append(group_id)
+                        row['group_assignments'].append(group_channel_id)
+            elif group_id == 0x0f and row['stereo_mode'] == 1:
+                row['matrix_sends'] = self._inspect_sends(source_id, matrix_ids, _MATRIX_SEND, 'matrix_channel_id')
             channels.append(row)
         return {'version': self.c9.version, 'channels': channels, **sockets,
                 'native_load_verified': False, 'physical_audio_verified': False}

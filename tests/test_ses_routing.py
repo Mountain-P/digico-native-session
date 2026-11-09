@@ -57,6 +57,12 @@ def _fixture(version=2242, devices=None):
     for channel_id, mode, pair in ((0x600, 2, 0x700), (0x700, 1, 0x600)):
         add(channel_id, mode, pair, [_module(0x0c, [(0x21, 0, 0)]),
                                     _module(0x0e, [(0xfe, 0, 0)])])
+    add(0x0f00, 1, 0, [_module(1, [(0, 0, 0), (0, 1, 0)]),
+                        _module(6, [(0x24, 0, 0xc3160000), (0x25, 0, 0),
+                                    (0x24, 1, 0xc3160000), (0x25, 1, 0)])])
+    for channel_id in (0x1000, 0x1001):
+        add(channel_id, 1, 0, [_module(0x0c, [(0x21, 0, 0)]),
+                               _module(0x0e, [(0xfe, 0, 0)])])
     for channel_id in (0x1c00, 0x1c01):
         add(channel_id, 1, 0, [_module(0x11, [(0xfe, 0, 0)])])
     for channel_id in (0x4e00, 0x4e01, 0x4e02):
@@ -193,6 +199,31 @@ class SesRoutingTests(unittest.TestCase):
         self.assertEqual(routing.console.to_bytes(), before)
         routing.set_output_route(0x100, 0x4e00, False)
         self.assertEqual(routing.inspect(channel_id=0x100)['channels'][0]['physical_outputs'], [])
+
+    def test_matrix_input_crosspoint_and_output_roundtrip(self):
+        routing, ports = _fixture()
+        routing.set_input_route(0x0f00, 0x1c01)
+        routing.set_input_route(0x0f00, 0x1c00, 'alt')
+        routing.set_matrix_send(0x0f00, 0x1001, -3.5, True)
+        routing.set_output_route(0x1001, 0x4e02, True)
+        restored = SesRouting(routing.c9, CurrentConsole.from_bytes(routing.console.to_bytes()), ports)
+        inputs = restored.inspect(channel_id=0x0f00)['channels'][0]
+        self.assertEqual(inputs['input_routes'], {'main': 0x1c010000, 'alt': 0x1c000000})
+        self.assertEqual(inputs['matrix_sends'], [
+            {'matrix_channel_id': 0x1000, 'level': -150.0, 'enabled': False},
+            {'matrix_channel_id': 0x1001, 'level': -3.5, 'enabled': True},
+        ])
+        self.assertEqual(restored.inspect(channel_id=0x1001)['channels'][0]['physical_outputs'], [0x4e02])
+        before = restored.console.to_bytes()
+        with self.assertRaisesRegex(SesRoutingError, 'Matrix Input.*main and alt'):
+            restored.set_input_route(0x0f00, 0x1c00, 'key')
+        with self.assertRaisesRegex(SesRoutingError, 'occupied'):
+            restored.set_output_route(0x1000, 0x4e02, True)
+        group = next(group for group in restored.c9.groups if group.group_id == 0x10)
+        group.channels.reverse()
+        with self.assertRaisesRegex(SesRoutingError, 'band position'):
+            restored.set_matrix_send(0x0f00, 0x1001, 0, False)
+        self.assertEqual(restored.console.to_bytes(), before)
 
     def test_stereo_pair_keeps_right_leg_when_left_disconnects(self):
         routing, ports = _fixture()
