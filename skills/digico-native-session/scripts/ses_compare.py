@@ -12,6 +12,7 @@ _COMPARE_PROFILES = (LEGACY_READ_PROFILE, 'quantum5-v2242')
 def _inspect(session, encoding, channel_id):
     from ses_automation import inspect_automation
     from ses_recall import inspect_recall
+    from ses_scope import inspect_scope
     from ses_signal import inspect_signal
 
     if len(set(session.section_tags)) != len(session.section_tags):
@@ -22,6 +23,14 @@ def _inspect(session, encoding, channel_id):
     console = session._console()
     SesFile._validate_current_references(console, snapshots)
     structure = session.structure
+    recall = inspect_recall(snapshots, console, structure['video_frame_rate'], encoding)
+    scope = inspect_scope(snapshots, console, topology, structure,
+                          encoding=encoding, include_parameters=False)
+    recall['scope']['scope_masks_decoded'] = True
+    recall['scope']['mask_interpretation_basis'] = scope['interpretation_basis']
+    for cue, eligibility in zip(recall['cues'], scope['cues']):
+        cue['saved_scope_status_counts'] = eligibility['status_counts']
+        cue['saved_scope_input_fader_status_counts'] = eligibility['input_fader_status_counts']
     return {
         'format_profile': session.build_profile,
         'release': session.release,
@@ -30,7 +39,7 @@ def _inspect(session, encoding, channel_id):
         'sections': {f'{tag:02x}': {'bytes': len(data), 'sha256': _sha256(data)}
                      for tag, data in sections.items()},
         'topology': topology.inspect(encoding),
-        'recall': inspect_recall(snapshots, console, structure['video_frame_rate'], encoding),
+        'recall': recall,
         'signal': inspect_signal(snapshots, console, topology, encoding, channel_id=channel_id),
         'automation': inspect_automation(sections, topology, structure, encoding),
     }, topology, snapshots
@@ -91,7 +100,8 @@ def _cue_comparison(left_snapshots, right_snapshots, left_recall, right_recall, 
     left_cues, right_cues = left_recall['cues'], right_recall['cues']
     fields = ('controller_scope', 'crossfade', 'input_fader_record_count',
               'input_fader_crossfade_counts', 'input_fader_exclusion_count',
-              'input_fader_candidate_after_saved_safes_count')
+              'input_fader_candidate_after_saved_safes_count', 'saved_scope_status_counts',
+              'saved_scope_input_fader_status_counts')
     matched = []
     for left_index, right_index in sorted(pairs.values()):
         before = left_cues[left_index]
