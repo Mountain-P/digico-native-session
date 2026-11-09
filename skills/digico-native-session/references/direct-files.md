@@ -12,7 +12,7 @@
 
 ## 從設定建立新 Session
 
-把 `schema_version: 1`、`build_profile`、`encoding`、`structure` 寫入 JSON，可附上 `operations`。`file-new` 依通道設定產生 header、C9、D3、local port、bank layout 與空的 Preset／Snapshot list，再依序執行操作。輸入只是一份 JSON。下例用 Q5 建立含 Input patch、stereo Master L/R、Preset 和 Snapshot 的場次。[完整合成 request](../assets/examples/file-new-quantum5.json)
+把 `schema_version: 1`、`build_profile`、`encoding`、`structure` 寫入 JSON，可附上 `operations`。`file-new` 依通道設定產生 header、C9、D3、local port、bank layout 與空的 Preset／Snapshot list，再依序執行操作。輸入只是一份 JSON。下例用 Q5 建立含 Input patch、stereo Master L/R、Aux、Matrix、Preset 和 Snapshot 的場次。[完整合成 request](../assets/examples/file-new-quantum5.json)
 
 ```sh
 SKILL="$HOME/.codex/skills/digico-native-session"
@@ -38,10 +38,10 @@ python3 "$SKILL/scripts/native_session.py" file-inspect \
 
 ## 先讀取或複製
 
-以下路徑、名稱與 ID 皆為合成範例，改成自己的檔案與實際 channel ID：
+以下為合成範例。請填入自己的檔案路徑與實際 channel ID。
 
 ```sh
-SKILL="$PWD/skills/digico-native-session"
+SKILL="$HOME/.codex/skills/digico-native-session"
 python3 "$SKILL/scripts/ses_file.py" inspect \
   --source /absolute/work/synthetic-source.ses --encoding cp950 --channel-id 0x0100
 
