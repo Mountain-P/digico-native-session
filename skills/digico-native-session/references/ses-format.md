@@ -1,6 +1,6 @@
 # 已實作的 `.ses` 記錄
 
-這是 `ses_file.py`、`ses_snapshot.py` 與 `ses_console.py` 使用的有限規格，來自原廠 Store／Load 靜態分析及合成檔案核對。範圍為已收錄的 Q1 V2126／vN 與 Quantum V2242／vO 格式；不是所有 DiGiCo Session 的完整規格。檔案 header 只能識別格式，不能證明來源 exact EXE。操作方式見 [直接檔案工具](direct-files.md)。
+這是 `ses_file.py`、`ses_snapshot.py` 與 `ses_console.py` 使用的有限規格，來自原廠 Store／Load 靜態分析及檔案核對。可寫格式涵蓋已收錄的 Q1 V2126／vN 與 Quantum V2242／vO。Q5 V2025／vM 支援唯讀解析。檔案 header 只能識別格式，不能證明來源 exact EXE。操作方式見 [直接檔案工具](direct-files.md)。
 
 ## 容器與基本記錄
 
@@ -8,9 +8,9 @@
 
 | 檔案 offset | 已確認內容 |
 |---|---|
-| `0..25` | 型號／`.SES`／vN 或 vO header；須與選定格式相符。 |
+| `0..25` | 型號／`.SES`／vM、vN 或 vO header，須與選定格式相符。 |
 | `32` | `uint16` header 大小，456。 |
-| `34` | `uint16` release：2126 或2242。 |
+| `34` | `uint16` release，支援2025、2126 或2242。 |
 | `36..158` | 123-byte `tConsoleRec`：count slots、timecode／sample-rate 等配置；其他 bytes 保留。 |
 | `256..415` | 40個 `uint32` section offsets。 |
 | `416..455` | 對應40個 byte tags。 |
@@ -78,7 +78,7 @@ DB Preset section 為 `DB + count`，每筆 `D7 + ChannelSnapshot list + 三個�
 
 ## 新建場次與通道結構
 
-C9 是通道和接點結構。Token 後有兩組 socket selector，每組含 `i32 byte_length`、CRLF 文字與每列一個 `u32` key。接著是 group list。CA／D1 group 的 metadata block 為 108 bytes。CA group 的 CB channel metadata block 在 vN 為 120 bytes，在 vO 為 121 bytes。Channel ID 位於 `+0x00`，ShortString31 名稱位於 `+0x04`，StereoMode 位於 `+0x25`，Preset index 位於 `+0x26`，paired buss ID 位於 `+0x32`。建立器同時生成 ConsoleRec 計數、C9 通道與 D3 current-state 通道。
+C9 是通道和接點結構。Token 後有兩組 socket selector，每組含 `i32 byte_length`、CRLF 文字與每列一個 `u32` key。接著是 group list。CA／D1 group 的 metadata block 為 108 bytes。CA group 的 CB channel metadata block 在 Q5 vM 為 88 bytes，在 vN 為 120 bytes，在 vO 為 121 bytes。Channel ID 位於 `+0x00`，ShortString31 名稱位於 `+0x04`，StereoMode 位於 `+0x25`，Preset index 位於 `+0x26`，paired buss ID 位於 `+0x32`。建立器同時生成 ConsoleRec 計數、C9 通道與 D3 current-state 通道。
 
 F6 含 50 個 210-byte port record，port type／number 位於 `+0xd0`／`+0xd1`。FC 存 device rows 與 fitted socket type arrays。新建以已比對的本機 F6 record 起始。Routing 寫入 D3 的已辨識控制。實體輸出 socket 的 `00 12 00` 保留來源 Channel ID 於 high word。Stereo Aux／Group 的右聲道使用 C9 reciprocal `BussID` 指向的 type7 companion。
 

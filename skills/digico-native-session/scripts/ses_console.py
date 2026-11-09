@@ -165,6 +165,7 @@ class CurrentConsole:
                                  'flags': record[3], 'native_unit': unit,
                                  'minimum': low, 'maximum': high,
                                  'file_write_supported': (self.module_pool is None
+                                     and self.version != 2025
                                      and bool(channel.own_modules.effective(1)[0])
                                      and _writable_control(channel.channel_id, prefix)
                                      and record[3] == 0 and module.parent_module_index == -1
@@ -201,6 +202,8 @@ class CurrentConsole:
                 'physical_audio_verified': False}
 
     def rename_channel(self, channel_id, namebytes):
+        if self.version == 2025:
+            raise ConsoleFormatError('Quantum5 V2025 file support is read-only')
         if self.module_pool is not None:
             raise ConsoleFormatError('Pool-backed Snapshot inspection is read-only')
         channel = self._channel(channel_id)
@@ -215,6 +218,8 @@ class CurrentConsole:
         return self
 
     def set_basic_control(self, id_hex, value):
+        if self.version == 2025:
+            raise ConsoleFormatError('Quantum5 V2025 file support is read-only')
         if not isinstance(id_hex, str) or not re.fullmatch('[0-9a-fA-F]{10}', id_hex):
             raise ConsoleFormatError('Control ID must contain exactly five hexadecimal bytes')
         raw_id = bytes.fromhex(id_hex)

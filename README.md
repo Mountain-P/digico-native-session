@@ -4,6 +4,15 @@
 
 編輯器模式的支援範圍由**確切 EXE SHA-256、profile 與功能開關**共同決定。直接改檔依檔案的型號、格式與版本辨識，不宣稱驗證 creator EXE。兩者都不延伸到實體控台控制或實際音訊。
 
+## 深度比對兩份 Q5 場次
+
+用 `file-compare` 在本機唯讀比對 V2025／V2242 的 Recall Scope、Safe、Crossfade、Macro 和 Insert／Aux。兩份可同版或跨版。[指令與報告欄位](skills/digico-native-session/references/file-comparison.md)
+
+```sh
+python3 skills/digico-native-session/scripts/native_session.py file-compare \
+  --left /absolute/work/source-a.ses --right /absolute/work/source-b.ses
+```
+
 ## 不啟動編輯器，直接改檔
 
 `file-new` 只需要 Python 3 和 JSON 設定，會寫出 48 kHz／25 fps 的新場次。`file-inspect` 可讀回通道結構、Routing、Preset、Snapshot 與基本混音。`file-edit` 依來源 SHA-256 核對 JSON request 並將結果寫到新檔。`file-clone` 可做逐 byte 相同的複本。
