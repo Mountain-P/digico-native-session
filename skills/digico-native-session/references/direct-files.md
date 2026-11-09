@@ -1,14 +1,40 @@
 # 不啟動編輯器，直接讀寫 `.ses`
 
-`scripts/ses_file.py` 在本機讀取、逐 byte 複製及編輯已辨識的 `.ses` 記錄，不啟動 Windows editor／VM，不連網，也不讀寫程序記憶體。`native_session.py file-inspect`／`file-clone`／`file-edit` 委派到同一實作，無需 `--vm`、`--exe` 或 PID。
+`native_session.py` 的 `file-new`、`file-inspect`、`file-clone`、`file-edit` 只需要本機 Python 3。這些命令與 `scripts/ses_file.py` 的 `new`、`inspect`、`clone`、`edit` 共用實作。
 
 ## 檔案格式與驗證範圍
 
 支援 [build profiles](build-profiles.md) 所列七個 vN／vO model／release header，包括舊 Q1 V2126 與六個新版 Quantum profile。Header 只能識別檔案格式家族，不能證明建立檔案的 exact EXE；結果明列 `format_profile`、`executable_identity_verified:false` 及 `native_acceptance_verified:false`。
 
-已辨識的容器包含456-byte header、section offset／tag directory、123-byte console record，以及 D2 Snapshot／D3 current-state 記錄。未知 section、記錄多出的 bytes、未變更的 shared pools 與 padding 保留原樣；無修改 roundtrip 必須與來源逐 byte 相同。這個工具尚未完整理解任意 structure、routing、Preset、外部整合與 factory 初始化，不能由少數已解記錄合成任意全新 Session。
+檔案工具辨識容器、ConsoleRec、C9 通道與 socket 結構、F6／FC port 資料、DB Preset、D2 Snapshot、D3 current state。編輯既有檔案時，未編輯的 section、延伸欄位與 padding 原樣保留。無修改 roundtrip 與來源逐 byte 相同。[已解格式](ses-format.md)
 
 直接產生輸出不需要 editor。原廠是否接受輸出，須另以相符版本的 native Load 及獨立回讀驗證。六款新版已各自驗證合成檔的 CP950 Snapshot 名稱、RecallAt、複製／刪除／capture、Input 名稱及 Fader／Trim／Mute；原廠重存後 D2 與獨立輸出逐 byte 相同。舊 Q1 另驗證從空範本 capture 與基本混音。Q5 另測共享引用由1變2及由1變0，原廠重存仍保留正確 UserCount。這些代表案例不能推定任意內容都相容，完整範圍見 [能力矩陣](../../../CAPABILITIES.md)。
+
+## 從設定建立新 Session
+
+把 `schema_version: 1`、`build_profile`、`encoding`、`structure` 寫入 JSON，可附上 `operations`。`file-new` 依通道設定產生 header、C9、D3、local port、bank layout 與空的 Preset／Snapshot list，再依序執行操作。輸入只是一份 JSON。下例用 Q5 建立含 Input patch、stereo Master L/R、Preset 和 Snapshot 的場次。[完整合成 request](../../../examples/file-new-quantum5.json)
+
+```sh
+SKILL="$PWD/skills/digico-native-session"
+python3 "$SKILL/scripts/native_session.py" file-new \
+  --request examples/file-new-quantum5.json \
+  --output /absolute/work/synthetic-new.ses
+python3 "$SKILL/scripts/native_session.py" file-inspect \
+  --source /absolute/work/synthetic-new.ses --topology --routing --presets
+```
+
+新建固定 48 kHz／25 fps。`structure.inputs`、`auxes`、`groups` 各接受 `{"mono": 8, "stereo": 2}` 形式的計數。第一個 stereo Group 是 Master，至少配置一個。`matrix_inputs`、`matrix_outputs`、`control_groups`、`graphic_eqs` 各接受非負整數。省略的項目使用已研究的同型號預設數量。下表上限依觀察到的組態設定，mono 計一 leg，stereo 計兩 leg。
+
+| Profile | Input legs | Aux legs | Group legs | Matrix In／Out | Control Group | GEQ |
+|---|---:|---:|---:|---:|---:|---:|
+| `quantum1-v2242-4` | 48 | 9 | 9 | 12／8 | 12 | 12 |
+| `quantum2-v2242-4` | 48 | 18 | 18 | 12／12 | 12 | 16 |
+| `quantum3-v2242` | 48 | 18 | 18 | 24／24 | 24 | 24 |
+| `quantum5-v2242` | 108 | 18 | 18 | 36／36 | 24 | 32 |
+| `quantum7-v2242` | 72 | 18 | 18 | 32／32 | 24 | 48 |
+| `quantum8-v2242` | 72 | 18 | 18 | 32／32 | 24 | 48 |
+
+建立器以可核對的欄位和控制值生成本機 I/O 及初始混音。Q5 可在最外層加上 `"madi_port1": true`，建立固定版型的 MADI 1 Rack，含 56 進、56 出，port selector 為 `port_type: 2`、`port_number: 0`。新檔的實體路由由 `operations` 指派。舊 Q1 V2126 支援編輯既有檔案。任意 rack 卡組態、既有場次的任意通道數量遷移，以及新建檔的原廠載入與實際音訊仍待驗證。
 
 ## 先讀取或複製
 
@@ -67,8 +93,8 @@ Request 的 `encoding` 控制寫入名稱 bytes，CLI 的 `--encoding` 控制輸
 
 | `op` | 欄位與範圍 |
 |---|---|
-| `set_channel_name` | `channel_id`、`name`；只改已存在、唯一的 Input raw ID `0x0100..0x01ff` 的 current-state 名稱。 |
-| `set_control` | `id`、有限數值 `value`；只改既有 Input 的 band0 fader／trim／mute，見下表。 |
+| `set_channel_name` | `channel_id`、`name`。支援唯一存在的 Input、Aux、Group、Matrix Output 的目前名稱。 |
+| `set_control` | `id`、有限數值 `value`。band0 Fader／Mute 支援 Input、Aux、Group、Matrix Output，Trim 支援 Input。 |
 | `rename` | `index`、`name`；改既有 Snapshot 名稱。 |
 | `timecode` | `index`、`timecode`，可加布林 `active`，預設 true；時間為 `HH:MM:SS:FF`、25fps、FF0..24。 |
 | `number` | `index`、正整數 `number`；設定 whole displayed Cue number，不能與其他 Cue 重複。 |
@@ -89,6 +115,25 @@ Create／duplicate／delete 另需 D3 current capture、DB Preset，以及 vO �
 | `220c00` mute | 數值0或1，保存為原生 float32；不接受 JSON boolean。 |
 
 完整 ID 是 prefix 加 channel ID 的 little-endian bytes，例如 Input `0x0100` 的 fader 為 `210c000001`。Control／channel 必須唯一存在，owned inline module、module type、flags 與 parent scope 也要符合已解契約；共享、繼承或不明控制保持唯讀。檔案沒有 live definition／VMT／response-pointer 證據，這些範圍來自逐 profile 的已審閱原生 seed，不能當成任意參數 setter。Request 不接受任意 offset／raw patch 或自訂 bounds。
+
+## Routing 與 Preset
+
+先用 `file-inspect --routing --topology` 取得 raw channel ID 和端點。端點可用實體 socket 的數值 ID，或有 F6 port 資料時用 `{"port_type": 1, "port_number": 0, "socket_index": 0}`。`socket_index` 從零起算。既有外部 port 依檔案中可核對的 C9、D3、F6／FC 資料選擇。
+
+| `op` | 欄位與範圍 |
+|---|---|
+| `set_input_route` | `channel_id`、`source`，選填 `route_kind`。Mono Input 支援 `main`、`alt`、`key`、`mustard_key`，已有 controller 時可用 `insert_return` 搭配 `insert_index` 0／1。Stereo Input 的 `main`／`alt` 指定已核對的相鄰接點之第一個。`source: null` 解除。 |
+| `set_output_route` | `channel_id`、`destination`、`connected`。支援 mono Input／Aux／Group；stereo Aux／Group 另指定 `leg: "left"` 或 `"right"`。已被其他訊號占用的端點會拒絕連接。 |
+| `set_group_assignment` | `channel_id`、`group_channel_id`、`enabled`。支援已存有相應 assignment controller 的 mono Input。 |
+| `set_aux_send` | `channel_id`、`aux_channel_id`、`level`、布林 `enabled`。支援 mono Input 到 mono Aux 的 −150 至 +10 dB send。 |
+| `preset_capture` | `channel_id`、`name`，可選 `group_name`、`notes`、`scopes`，從目前 mono Input 擷取指定處理資料。 |
+| `preset_update` | `index`、`channel_id`、可選 `scopes`，以同型態目前 Input 更新已有的處理資料。 |
+| `preset_rename` | `index`、`name`，可選 `group_name`、`notes`。 |
+| `preset_lock` | `index`、布林 `locked`，適用一般使用者 Preset。 |
+| `preset_apply` | `index`、`channel_id`、必填 `scopes`，套用相符的處理控制到目前 mono Input。 |
+| `preset_delete` | `index`，刪除未鎖定 Preset，並檢查、更新 C9／D2／D3／DB 的索引。 |
+
+`file-inspect --presets` 列出名稱、索引與處理範圍。可加 `--preset-index N --include-raw-controls` 讀指定 Preset。`index` 從零起算。名稱與群組最多31 encoded bytes，備註最多255 bytes。`scopes` 從 `trim`、`eq`、`dynamics`、`delay`、`fader`、`tidal_preamp`、`tidal_eq`、`tidal_comp`、`tidal_gate` 選擇。套用僅複製同型態 Input 已辨識的處理值。實體輸入增益、Insert send、硬體連線、FX／Mix／多通道 Preset 在目前 authoring 範圍外。
 
 ## 輸出與資源界線
 

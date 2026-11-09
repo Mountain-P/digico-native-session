@@ -76,4 +76,14 @@ DB Preset section 為 `DB + count`，每筆 `D7 + ChannelSnapshot list + 三個�
 
 解析／重新輸出的 bytes 相同，證明已解 framing 與保留策略相符；合成測試另外覆蓋截斷、越界、鎖定、引用、計數與變動範圍。它不證明原廠接受所有編輯。原生接受須另以相符版本 Load、獨立欄位讀回及必要的原廠 Save／Reload 核對；當次結果與 [能力表](../../../CAPABILITIES.md) 才決定可宣稱的範圍。
 
-Unknown sections 保留原樣，不代表其全部語意已解。任意 routing、FX、Preset 修改、structure 重建、跨版本轉檔與 factory Session 合成，均不能只由這份有限規格推定可用。
+## 新建場次與通道結構
+
+C9 是通道和接點結構。Token 後有兩組 socket selector，每組含 `i32 byte_length`、CRLF 文字與每列一個 `u32` key。接著是 group list。CA／D1 group 的 metadata block 為 108 bytes。CA group 的 CB channel metadata block 在 vN 為 120 bytes，在 vO 為 121 bytes。Channel ID 位於 `+0x00`，ShortString31 名稱位於 `+0x04`，StereoMode 位於 `+0x25`，Preset index 位於 `+0x26`，paired buss ID 位於 `+0x32`。建立器同時生成 ConsoleRec 計數、C9 通道與 D3 current-state 通道。
+
+F6 含 50 個 210-byte port record，port type／number 位於 `+0xd0`／`+0xd1`。FC 存 device rows 與 fitted socket type arrays。新建以已比對的本機 F6 record 起始。Routing 寫入 D3 的已辨識控制。實體輸出 socket 的 `00 12 00` 保留來源 Channel ID 於 high word。Stereo Aux／Group 的右聲道使用 C9 reciprocal `BussID` 指向的 type7 companion。
+
+F3 是 `tChannelBanks`，每列為 361 bytes，包含 bank key、兩個 ShortString15 及十二個 Channel ID。D4 的 807-byte layout 包含八個 bank layout 與 master fader IDs。建立器依各型號保留樣本的 slot 位置指派 bank key，並清零 process-local pointer 欄位。D3 的 layout 與 D4 使用同一份新 layout。
+
+DB／D7 Preset 的直接編輯維護 C9 `+0x26`、D5 channel snapshot metadata `+34` 的 positional index。套用處理值時依完整的 parameter、module、band ID 對應 mono Input，保留目前路由。
+
+生成範圍、編輯契約與驗證層級見[直接讀寫指南](direct-files.md)。既有未知 sections 的原始資料由編輯器保留。原廠新建檔載入、任意結構遷移、FX／Mix Preset 與跨版本轉檔仍需獨立證據。

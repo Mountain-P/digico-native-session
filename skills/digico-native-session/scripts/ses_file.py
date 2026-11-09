@@ -65,6 +65,15 @@ def _name(value, encoding):
     return raw
 
 
+def _preset_text(value, encoding, limit):
+    if not isinstance(value, str) or '\0' in value:
+        raise SesFormatError('Preset text must be a string without NUL')
+    raw = value.encode(encoding, errors='strict')
+    if len(raw) > limit:
+        raise SesFormatError(f'Preset text exceeds {limit} encoded bytes')
+    return raw
+
+
 def _quarterframes(value):
     if not isinstance(value, str) or not re.fullmatch(r'[0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{2}', value):
         raise SesFormatError('Timecode must be HH:MM:SS:FF')
@@ -81,6 +90,22 @@ def _json_object(pairs):
             raise SesFormatError('Duplicate JSON field: ' + key)
         result[key] = value
     return result
+
+
+def _read_request(path):
+    request_stat = path.stat()
+    if not stat.S_ISREG(request_stat.st_mode):
+        raise SesFormatError('Request must be a regular file')
+    if request_stat.st_size > MAX_REQUEST_BYTES:
+        raise SesFormatError('Request exceeds the local JSON byte bound')
+    flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NONBLOCK', 0)
+    with os.fdopen(os.open(path, flags), 'rb') as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise SesFormatError('Request must be a regular file')
+        raw_request = stream.read(MAX_REQUEST_BYTES + 1)
+    if len(raw_request) > MAX_REQUEST_BYTES:
+        raise SesFormatError('Request exceeds the local JSON byte bound')
+    return json.loads(raw_request.decode('utf-8-sig'), object_pairs_hook=_json_object)
 
 
 def _format_profile(data, requested):
@@ -144,6 +169,26 @@ class SesFile:
     _header: bytes = field(repr=False)
     sections: tuple[bytes, ...] = field(repr=False)
     build_profile: str
+
+    @classmethod
+    def assemble(cls, build_profile, console_record, sections):
+        """Serialize a newly built native envelope from typed components."""
+        if build_profile not in FORMAT_PROFILES:
+            raise SesFormatError('Unsupported direct-file build profile')
+        if not isinstance(console_record, bytes) or len(console_record) != 123:
+            raise SesFormatError('A new Session needs a 123-byte ConsoleRec')
+        tags, payloads = zip(*sections) if sections else ((), ())
+        if (not tags or tags[0] != 0 or len(tags) >= INDEX_SLOTS
+                or any(type(tag) is not int or not 0 <= tag <= 255 for tag in tags)
+                or len(tags) != len(set(tags))):
+            raise SesFormatError('Invalid new Session section directory')
+        profile = select_profile(build_profile=build_profile)
+        header = bytearray(HEADER_BYTES)
+        header[:26] = bytes.fromhex(profile['session_file']['header_hex'])
+        struct.pack_into('<HH', header, 32, HEADER_BYTES, profile['release'])
+        header[36:159] = console_record
+        header[TAGS_OFFSET:TAGS_OFFSET + len(tags)] = bytes(tags)
+        return cls.from_bytes(cls(bytes(header), payloads, build_profile).to_bytes(), build_profile)
 
     @classmethod
     def from_bytes(cls, data, build_profile=None):
@@ -214,6 +259,22 @@ class SesFile:
         return CurrentConsole.from_bytes(self.sections[self._section_index(0xd3)],
                                          version=self.release, build_profile=self.build_profile)
 
+    def _topology(self, sections=None):
+        from ses_routing import C9Console
+        sections = self.sections if sections is None else sections
+        return C9Console.from_bytes(sections[self._section_index(0xc9)], version=self.release)
+
+    def _routing(self, console, sections=None):
+        from ses_routing import SesRouting
+        sections = self.sections if sections is None else sections
+        ports = sections[self._section_index(0xf6)] if 0xf6 in self.section_tags else None
+        devices = sections[self._section_index(0xfc)] if 0xfc in self.section_tags else None
+        return SesRouting(self._topology(sections), console, ports=ports, devices=devices)
+
+    def _presets(self):
+        from ses_presets import SessionPresets
+        return SessionPresets.from_bytes(self.sections[self._section_index(0xdb)], self.release)
+
     @staticmethod
     def _validate_current_references(console, snapshots):
         pool_count, snapshot_count = len(snapshots.modules), len(snapshots.snapshots)
@@ -256,7 +317,8 @@ class SesFile:
         return bytes(header) + b''.join(self.sections)
 
     def inspect(self, encoding='ascii', channel_id=None, include_raw_controls=False,
-                snapshot_index=None):
+                snapshot_index=None, *, include_routing=False, include_topology=False,
+                include_presets=False, preset_index=None):
         if encoding not in ENCODINGS:
             raise SesFormatError('Unsupported text encoding')
         data = self.to_bytes()
@@ -305,6 +367,13 @@ class SesFile:
                                             include_raw_controls=include_raw_controls),
                 'effective_recall_verified': False,
             }
+        if include_topology:
+            report['topology'] = self._topology().inspect(encoding)
+        if include_routing:
+            report['routing'] = self._routing(self._console()).inspect(encoding, channel_id)
+        if include_presets or preset_index is not None:
+            report['presets'] = self._presets().inspect(encoding, preset_index,
+                                                       include_raw_controls)
         return report
 
     def edit(self, request):
@@ -334,6 +403,8 @@ class SesFile:
         snapshots = self._snapshots()
         sections = list(self.sections)
         console = None
+        routing = None
+        presets = None
         for operation in operations:
             if not isinstance(operation, dict):
                 raise SesFormatError('Each operation must be an object')
@@ -349,6 +420,72 @@ class SesFile:
                     console.set_basic_control(operation['id'], operation['value'])
                 # Later create operations capture the edited current state.
                 sections[self._section_index(0xd3)] = console.to_bytes()
+            elif op in ('set_input_route', 'set_output_route', 'set_group_assignment', 'set_aux_send'):
+                if console is None:
+                    console = self._console()
+                if routing is None:
+                    routing = self._routing(console, sections)
+                if op == 'set_input_route':
+                    _fields(operation, ('op', 'channel_id', 'source'),
+                            ('route_kind', 'insert_index'), label=op)
+                    routing.set_input_route(operation['channel_id'], operation['source'],
+                                            route_kind=operation.get('route_kind', 'main'),
+                                            insert_index=operation.get('insert_index', 0))
+                elif op == 'set_output_route':
+                    _fields(operation, ('op', 'channel_id', 'destination', 'connected'), ('leg',), label=op)
+                    routing.set_output_route(operation['channel_id'], operation['destination'],
+                                             operation['connected'], leg=operation.get('leg'))
+                elif op == 'set_group_assignment':
+                    _fields(operation, ('op', 'channel_id', 'group_channel_id', 'enabled'), label=op)
+                    routing.set_group_assignment(operation['channel_id'], operation['group_channel_id'],
+                                                 operation['enabled'])
+                else:
+                    _fields(operation, ('op', 'channel_id', 'aux_channel_id', 'level', 'enabled'), label=op)
+                    routing.set_aux_send(operation['channel_id'], operation['aux_channel_id'],
+                                         operation['level'], operation['enabled'])
+                sections[self._section_index(0xd3)] = console.to_bytes()
+            elif op in ('preset_capture', 'preset_update', 'preset_rename',
+                        'preset_delete', 'preset_apply', 'preset_lock'):
+                if presets is None:
+                    presets = self._presets()
+                if op not in ('preset_rename', 'preset_lock') and console is None:
+                    console = self._console()
+                if op == 'preset_capture':
+                    _fields(operation, ('op', 'channel_id', 'name'),
+                            ('group_name', 'notes', 'scopes'), label=op)
+                    presets.capture(console.snapshot, operation['channel_id'],
+                                    name=_name(operation['name'], encoding),
+                                    group=_preset_text(operation.get('group_name', ''), encoding, 31),
+                                    notes=_preset_text(operation.get('notes', ''), encoding, 255),
+                                    scopes=operation.get('scopes'))
+                elif op == 'preset_update':
+                    _fields(operation, ('op', 'index', 'channel_id'), ('scopes',), label=op)
+                    presets.update(operation['index'], console.snapshot, operation['channel_id'],
+                                   scopes=operation.get('scopes'))
+                elif op == 'preset_rename':
+                    _fields(operation, ('op', 'index', 'name'), ('group_name', 'notes'), label=op)
+                    presets.rename(operation['index'], _name(operation['name'], encoding),
+                                   group=_preset_text(operation['group_name'], encoding, 31)
+                                   if 'group_name' in operation else None,
+                                   notes=_preset_text(operation['notes'], encoding, 255)
+                                   if 'notes' in operation else None)
+                elif op == 'preset_delete':
+                    _fields(operation, ('op', 'index'), label=op)
+                    topology = self._topology(sections)
+                    presets.delete(operation['index'], current=console.snapshot,
+                                   snapshots=snapshots, routing=topology)
+                    sections[self._section_index(0xc9)] = topology.to_bytes()
+                    routing = None
+                elif op == 'preset_lock':
+                    _fields(operation, ('op', 'index', 'locked'), label=op)
+                    presets.set_lock(operation['index'], operation['locked'])
+                else:
+                    _fields(operation, ('op', 'index', 'channel_id', 'scopes'), label=op)
+                    presets.apply(operation['index'], console.snapshot, operation['channel_id'],
+                                  scopes=operation['scopes'])
+                sections[self._section_index(0xdb)] = presets.to_bytes()
+                if op in ('preset_apply', 'preset_delete'):
+                    sections[self._section_index(0xd3)] = console.to_bytes()
             elif op == 'rename':
                 _fields(operation, ('op', 'index', 'name'), label='rename')
                 snapshots.rename(operation['index'], _name(operation['name'], encoding))
@@ -394,6 +531,8 @@ class SesFile:
         # Fully reparse the changed semantic section before returning it.
         result = SesFile.from_bytes(result.to_bytes(), self.build_profile)
         result._snapshots()
+        if presets is not None:
+            result._presets()
         if console is not None:
             self._validate_current_references(result._console(), result._snapshots())
         return result
@@ -414,10 +553,11 @@ class SesFile:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
-    for command in ('inspect', 'clone', 'edit'):
+    for command in ('inspect', 'clone', 'edit', 'new'):
         sub = commands.add_parser(command)
-        sub.add_argument('--source', type=Path, required=True)
-        sub.add_argument('--build-profile', choices=FORMAT_PROFILES)
+        if command != 'new':
+            sub.add_argument('--source', type=Path, required=True)
+            sub.add_argument('--build-profile', choices=FORMAT_PROFILES)
         sub.add_argument('--encoding', choices=ENCODINGS, default='ascii')
         sub.add_argument('--channel-id', type=lambda value: int(value, 0),
                          help='filter current-mix inspection to one raw uint16 channel ID')
@@ -425,30 +565,29 @@ def main(argv=None):
                          help='also list bounded raw controller records without guessing datatypes')
         sub.add_argument('--snapshot-index', type=int,
                          help='also inspect one Snapshot stored mix, resolving shared pool records')
+        sub.add_argument('--topology', action='store_true', help='include C9 groups and channel IDs')
+        sub.add_argument('--routing', action='store_true', help='include supported stored routing')
+        sub.add_argument('--presets', action='store_true', help='include the Session Preset library')
+        sub.add_argument('--preset-index', type=int, help='inspect a single stored Preset')
         if command != 'inspect':
             sub.add_argument('--output', type=Path, required=True)
-        if command == 'edit':
+        if command in ('edit', 'new'):
             sub.add_argument('--request', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        session = SesFile.read(args.source, args.build_profile)
-        if args.command == 'edit':
-            request_stat = args.request.stat()
-            if not stat.S_ISREG(request_stat.st_mode):
-                raise SesFormatError('Request must be a regular file')
-            if request_stat.st_size > MAX_REQUEST_BYTES:
-                raise SesFormatError('Request exceeds the local JSON byte bound')
-            flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NONBLOCK', 0)
-            with os.fdopen(os.open(args.request, flags), 'rb') as stream:
-                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                    raise SesFormatError('Request must be a regular file')
-                raw_request = stream.read(MAX_REQUEST_BYTES + 1)
-            if len(raw_request) > MAX_REQUEST_BYTES:
-                raise SesFormatError('Request exceeds the local JSON byte bound')
-            session = session.edit(json.loads(raw_request.decode('utf-8-sig'),
-                                              object_pairs_hook=_json_object))
+        if args.command == 'new':
+            from ses_factory import create_session
+            session = create_session(_read_request(args.request))
+        else:
+            session = SesFile.read(args.source, args.build_profile)
+            if args.command == 'edit':
+                session = session.edit(_read_request(args.request))
         report = session.inspect(args.encoding, args.channel_id, args.include_raw_controls,
-                                 args.snapshot_index)
+                                 args.snapshot_index, include_routing=args.routing,
+                                 include_topology=args.topology, include_presets=args.presets,
+                                 preset_index=args.preset_index)
+        if args.command == 'new':
+            report['created_from_request'] = True
         if args.command != 'inspect':
             session.write(args.output)
         print(json.dumps(report, ensure_ascii=False,

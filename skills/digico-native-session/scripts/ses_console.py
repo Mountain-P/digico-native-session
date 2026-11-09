@@ -1,6 +1,6 @@
 """Pure current-mix D3 semantics over the bounded native Snapshot serializer.
 
-Only existing Input channel names, fader, trim and mute can be changed. File
+Input and output-channel names, fader, trim and mute have bounded setters. File
 records do not contain live controller definition/VMT/response-pointer proof;
 these edits therefore never claim runtime acceptance or physical audio proof.
 """
@@ -33,14 +33,18 @@ _TRIM_MINIMUM = {name: (-40.0 if name in ('quantum1-v2126', 'quantum1-v2242-4',
                                          'quantum8-v2242') else -20.0)
                  for name in _SUPPORTED_PROFILES}
 _ENCODINGS = ('ascii', 'cp950', 'utf-8')
+_LEVEL_CHANNEL_TYPES = (0x01, 0x05, 0x06, 0x10)
 MAX_RAW_CONTROL_ROWS = 100000
 
 
-def _channel_id(value, input_only=False):
+def _writable_control(channel_id, prefix):
+    kind = channel_id >> 8
+    return kind == 0x01 if prefix == '010100' else kind in _LEVEL_CHANNEL_TYPES
+
+
+def _channel_id(value):
     if type(value) is not int or not 0 <= value <= 65535:
         raise ConsoleFormatError('Channel ID must be a uint16 integer')
-    if input_only and not 0x100 <= value <= 0x1ff:
-        raise ConsoleFormatError('Current-mix writes support existing Input channel IDs 0x0100..0x01ff only')
     return value
 
 
@@ -81,8 +85,8 @@ class CurrentConsole:
     def to_bytes(self):
         return self.snapshot.to_bytes()
 
-    def _channel(self, channel_id, input_only=False):
-        _channel_id(channel_id, input_only)
+    def _channel(self, channel_id):
+        _channel_id(channel_id)
         rows = [row for row in self.snapshot.channels if row.channel_id == channel_id]
         if len(rows) != 1:
             raise ConsoleFormatError('Current-state channel is missing or ambiguous')
@@ -162,7 +166,7 @@ class CurrentConsole:
                                  'minimum': low, 'maximum': high,
                                  'file_write_supported': (self.module_pool is None
                                      and bool(channel.own_modules.effective(1)[0])
-                                     and 0x100 <= channel.channel_id <= 0x1ff
+                                     and _writable_control(channel.channel_id, prefix)
                                      and record[3] == 0 and module.parent_module_index == -1
                                      and channel_counts[channel.channel_id] == 1
                                      and prefix_counts[prefix] == 1)})
@@ -199,7 +203,9 @@ class CurrentConsole:
     def rename_channel(self, channel_id, namebytes):
         if self.module_pool is not None:
             raise ConsoleFormatError('Pool-backed Snapshot inspection is read-only')
-        channel = self._channel(channel_id, input_only=True)
+        channel = self._channel(channel_id)
+        if channel_id >> 8 not in _LEVEL_CHANNEL_TYPES:
+            raise ConsoleFormatError('Names are writable on Input, Aux, Group and Matrix outputs')
         if (not isinstance(namebytes, bytes) or not 1 <= len(namebytes) <= 31
                 or b'\0' in namebytes):
             raise ConsoleFormatError('Channel name requires 1..31 encoded bytes without NUL')
@@ -214,9 +220,11 @@ class CurrentConsole:
         raw_id = bytes.fromhex(id_hex)
         prefix = raw_id[:3].hex()
         if prefix not in _BASIC:
-            raise ConsoleFormatError('File control write is limited to band0 Input fader, trim, and mute')
+            raise ConsoleFormatError('File control write is limited to reviewed band0 fader, trim and mute')
         channel_id = struct.unpack('<H', raw_id[3:])[0]
-        channel = self._channel(channel_id, input_only=True)
+        if not _writable_control(channel_id, prefix):
+            raise ConsoleFormatError('Channel type is outside the reviewed control write domain')
+        channel = self._channel(channel_id)
         if not channel.own_modules.effective(1)[0]:
             raise ConsoleFormatError('Current-state control uses shared module references')
         if self.module_pool is not None:

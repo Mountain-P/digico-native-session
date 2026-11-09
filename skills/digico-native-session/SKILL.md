@@ -1,13 +1,13 @@
 ---
 name: digico-native-session
-description: 直接讀寫 DiGiCo Quantum .ses 的 Snapshot 與基本混音，或以原生 TCP 操作已驗證 Windows 離線編輯器。支援 Session、25fps、inventory、authoring 及 MCP；不用 OSC 或 UI。直接改檔保留未知區塊，不支援任意結構重建或實體控台控制。
+description: 本機建立與編輯 DiGiCo Quantum .ses，支援通道結構、Routing、Preset、Snapshot 與基本混音。可從 JSON 產生 V2242 場次並讀回，或以原生 TCP 操作已驗證的 Windows 離線編輯器。
 ---
 
 # DiGiCo 原生 Session 與混音控制
 
 使用隨附 `scripts/native_session.py`。先按目標選路徑：
 
-- **本機 `.ses` 檔案**：使用 `file-inspect`／`file-clone`／`file-edit`，不需要 Windows、編輯器、VM 或網路。可解析檔頭、區塊、Snapshot 與目前基本混音，修改後保留其他資料；先讀 [直接讀寫檔案](references/direct-files.md)。檔頭只能辨識已研究的格式，不證明產生檔案的 EXE hash。不能修改 structure counts 來冒充完整結構重建。
+- **本機 `.ses` 檔案**。用 `file-new` 從 JSON 通道結構建立場次，用 `file-inspect --topology --routing --presets` 讀回。用 `file-edit` 修改既有場次並另存，或用 `file-clone` 製作複本。這些操作只需要 Python 3。先讀 [直接讀寫檔案](references/direct-files.md) 的建立範圍、路由和 Preset 契約。
 - **已啟動的離線編輯器**：以原生 TCP 修改，再用唯讀 `ReadProcessMemory` 驗證。以下 exact EXE／PID／listener 規則適用這條路徑。`execute`／`author-execute` 必須明列 `--send` 才送出；離線規劃不連線。
 
 兩條路徑都不用 OSC、UI 或程序記憶體寫入。工具不安裝軟體、不啟動 VM、不更改 INI／防火牆／FPS。直接改檔寫入全新輸出，不覆寫來源；工具自身解析成功不等於原廠載入驗證。
